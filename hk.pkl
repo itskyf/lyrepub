@@ -1,0 +1,20 @@
+amends "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Config.pkl"
+import "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Builtins.pkl"
+// Using a coding agent? See https://hk.jdx.dev/agents
+
+steps {
+  ["droast"] = Builtins.droast
+  ["rumdl"] = Builtins.rumdl
+  ["rumdl-format"] = (Builtins.rumdl_format) {
+    depends = "rumdl"
+  }
+  ["ruff"] = Builtins.ruff
+  ["ruff-format"] = (Builtins.ruff_format) {
+    depends = "ruff"
+  }
+  ["tombi"] = Builtins.tombi
+  ["tombi-format"] = (Builtins.tombi_format) {
+    depends = "tombi"
+  }
+}
+

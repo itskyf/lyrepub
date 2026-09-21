@@ -1,0 +1,11 @@
+FROM ghcr.io/0xshug0/audio.cpp:full-cuda13
+
+USER root
+
+RUN apt-get update \
+    && apt-get install --yes --no-install-recommends \
+        libespeak-ng1 \
+        espeak-ng-data \
+    && rm --force --recursive /var/lib/apt/lists/*
+
+USER ubuntu

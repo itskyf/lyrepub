@@ -1,0 +1,8 @@
+[tools]
+"github:immanuwell/dockerfile-roast" = "latest"
+pixi = "latest"
+ruff = "latest"
+rumdl = "latest"
+tombi = "latest"
+typst = "latest"
+typstyle = "latest"

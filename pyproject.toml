@@ -1,0 +1,31 @@
+[project]
+name = "lyrepub"
+requires-python = ">= 3.13"
+authors = [{ name = "Kỳ", email = "40734986+itskyf@users.noreply.github.com" }]
+dependencies = ["epublib>=0.1.7,<0.2", "nemo-text-processing @ git+https://github.com/itskyf/NeMo-text-processing.git@main?rev_type=branch", "transformers[torch]>=5.17.0,<6", "underthesea>=9.5.0,<10"]
+dynamic = ["version"]
+
+[dependency-groups]
+dev = ["pytest>=9.1.1,<10", "pytest-asyncio>=1.4.0,<2"]
+
+[build-system]
+requires = ["setuptools", "setuptools-scm"]
+build-backend = "setuptools.build_meta"
+
+[tool.pixi.workspace]
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.pypi-dependencies]
+lyrepub = { path = ".", editable = true }
+
+[tool.pixi.environments]
+default = { solve-group = "default" }
+dev = { features = ["dev"], solve-group = "default" }
+
+[tool.pixi.tasks]
+
+[tool.pixi.dependencies]
+cxx-compiler = ">=2.0.0,<3"
+ffmpeg = ">=9.0.1,<10"
+openfst = ">=1.8.4,<2"
