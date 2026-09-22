@@ -16,5 +16,11 @@ steps {
   ["tombi-format"] = (Builtins.tombi_format) {
     depends = "tombi"
   }
-}
 
+  ["whitespace"] = new Step {
+    glob = List("*.typ")
+    check = "typstyle --check {{files}}"
+    fix = "typstyle --inplace {{files}}"
+    batch = true
+  }
+}
