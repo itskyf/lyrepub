@@ -1,6 +1,10 @@
 ---
-
-## name: Work item about: Track a scoped unit of research, implementation, experiment, or decision work title: "" labels: "" assignees: ""
+name: Work item
+about: Track a scoped unit of research, implementation, experiment, or decision work
+title: ""
+labels: ""
+assignees: ""
+---
 
 ## Context
 
