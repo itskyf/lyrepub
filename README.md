@@ -81,7 +81,6 @@ apm install
 - `docs/report/`: Scientific report and interpretation of results
 - `src/`: Reusable implementation
 - `pyproject.toml`: Python package metadata and Python dependencies
-- `pixi.toml`: Reproducible project environments, system dependencies, and tasks
 - `mise.toml`: Development-tool versions and installation
 - `hk.pkl`: Repository formatting, linting, and validation checks
 - GitHub Issues: Scoped research, implementation, experiment, and decision work
