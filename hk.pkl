@@ -3,20 +3,48 @@ import "package://github.com/jdx/hk/releases/download/v2.0.1/hk@2.0.1#/Builtins.
 // Using a coding agent? See https://hk.jdx.dev/agents
 
 steps {
-  ["droast"] = Builtins.droast
-  ["rumdl"] = Builtins.rumdl
-  ["rumdl-format"] = (Builtins.rumdl_format) {
-    depends = "rumdl"
-  }
-  ["ruff"] = Builtins.ruff
-  ["ruff-format"] = (Builtins.ruff_format) {
-    depends = "ruff"
-  }
+  // Data Formats
   ["tombi"] = Builtins.tombi
   ["tombi-format"] = (Builtins.tombi_format) {
     depends = "tombi"
   }
 
+  // Infrastructure
+  ["droast"] = Builtins.droast
+  ["hclfmt"] = Builtins.hclfmt
+
+  // Markdown
+  ["rumdl"] = Builtins.rumdl
+  ["rumdl-format"] = (Builtins.rumdl_format) {
+    depends = "rumdl"
+  }
+
+  // Python
+  ["ruff"] = Builtins.ruff
+  ["ruff-format"] = (Builtins.ruff_format) {
+    depends = "ruff"
+  }
+
+  // Special Purpose
+  ["byte-order-marker"] = Builtins.byte_order_marker
+  ["check-added-large-files"] = Builtins.check_added_large_files
+  ["check-case-conflict"] = Builtins.check_case_conflict
+  ["check-executables-have-shebangs"] = Builtins.check_executables_have_shebangs
+  ["check-merge-conflict"] = Builtins.check_merge_conflict
+  ["check-shebang-scripts-are-executable"] = Builtins.check_shebang_scripts_are_executable
+  ["check-symlinks"] = Builtins.check_symlinks
+  ["destroyed-symlinks"] = Builtins.destroyed_symlinks
+  ["detect-private-key"] = Builtins.detect_private_key
+  ["fix-smart-quotes"] = Builtins.fix_smart_quotes
+  ["forbid-submodules"] = Builtins.forbid_submodules
+  ["lychee"] = (Builtins.lychee) {
+    exclude = List("mise.lock")
+  }
+  ["mixed-line-ending"] = Builtins.mixed_line_ending
+  ["newlines"] = Builtins.newlines
+  ["trailing-whitespace"] = Builtins.trailing_whitespace
+
+  // Typst
   ["whitespace"] = new Step {
     glob = List("*.typ")
     check = "typstyle --check {{files}}"

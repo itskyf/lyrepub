@@ -1,5 +1,7 @@
 [tools]
 "github:immanuwell/dockerfile-roast" = "latest"
+hk = "latest"
+lychee = "latest"
 pixi = "latest"
 ruff = "latest"
 rumdl = "latest"

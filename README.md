@@ -1,48 +1,79 @@
-# Vietnamese Accessible EPUB TTS
+# LyrePub
 
-A coursework project for converting Vietnamese EPUB publications into EPUB 3.3 publications with synchronized synthetic narration through Media Overlays.
+A research coursework project for producing standards-conformant, accessible EPUB publications with synchronized Vietnamese audio.
 
-The project evaluates and integrates existing TTS systems; it does not train a new TTS model.
+LyrePub investigates two audio pathways:
 
-## Goals and Scope
+1. **TTS synthesis** — generate narration from EPUB text using existing Vietnamese-capable TTS systems.
+2. **Audiobook alignment** — align an existing audiobook with the corresponding EPUB content.
 
-The project studies three questions:
+Both pathways converge on the same synchronization and publication pipeline. The project uses existing models and tools rather than training or fine-tuning new speech models.
 
-1. Which structural and linguistic properties of Vietnamese EPUB books create material requirements for TTS?
-2. How well do existing Vietnamese-capable TTS systems satisfy those requirements?
-3. Can the selected system be integrated into a valid, synchronized, and accessible EPUB 3.3 pipeline?
-
-The core workflow is:
+## Pipeline
 
 ```text
 EPUB
-→ text and structure analysis
-→ TTS requirements
-→ benchmark
-→ TTS evaluation
-→ audio alignment
-→ Media Overlays
-→ EPUB validation
+  ↓
+preserve structure and extract synchronization targets
+  │
+  ├── TTS synthesis ────────────────┐
+  │                                 │
+  └── align with existing audiobook ┤
+                                    ↓
+                           text–audio timings
+                                    ↓
+                         EPUB Media Overlays
+                                    ↓
+                  accessible EPUB 3.3 publication
+                                    ↓
+                       validation and DAISY 3
 ```
 
-Training, voice cloning, real-time serving, MLOps, and expressive audio effects are outside the default scope.
+The exact research questions, experimental methodology, evaluation procedure, and scope are defined in [`docs/research/protocol.md`](docs/research/protocol.md).
+
+## Publication Target
+
+The primary artifact targets:
+
+- EPUB 3.3;
+- EPUB Accessibility 1.1;
+- applicable EPUB Accessibility Techniques 1.1;
+- synchronized audio through native EPUB Media Overlays.
+
+Outputs are validated with EPUBCheck, Ace by DAISY, and focused manual inspection where automated validation is insufficient.
+
+The coursework also requires a DAISY 3 deliverable, generated from the completed publication using a standard conversion workflow.
+
+## Running Locally
+
+LyrePub uses [pixi](https://pixi.prefix.dev/latest/installation/) for reproducible project environments. Install Pixi using its official installation guide, then from the repository root run:
+
+```shell
+pixi install
+```
+
+Run project commands inside the environment with:
+
+```shell
+pixi run <command>
+```
 
 ## Repository Map
 
-| Location                    | Purpose                                                                                              |
-| --------------------------- | ---------------------------------------------------------------------------------------------------- |
-| `docs/research/protocol.md` | Canonical research questions, scope, methodology, benchmark rules, and evaluation protocol           |
-| `docs/report/`              | Final scientific narrative: methods actually used, results, discussion, limitations, and conclusions |
-| `src/`                      | Reusable implementation                                                                              |
-| GitHub Issues & Milestones  | Current project phases, goals, tasks, decisions, dependencies, blockers, and handoffs                |
-| Pull Requests               | Review boundary for changes to code, configuration, and durable documentation                        |
+| Location                    | Purpose                                                                       |
+| --------------------------- | ----------------------------------------------------------------------------- |
+| `docs/research/protocol.md` | Canonical research scope, questions, methodology, experiments, and evaluation |
+| `docs/report/`              | Final scientific report and interpretation of results                         |
+| `src/`                      | Reusable implementation                                                       |
+| `pyproject.toml`            | Python project and reproducible dependency environment                        |
+| GitHub Issues               | Scoped research, implementation, experiment, and decision work                |
+| GitHub Milestones           | Research phases and deliverable outcomes                                      |
+| Pull Requests               | Review boundary for repository changes                                        |
 
-Live project status belongs on GitHub, not in repository documentation.
+Live project status belongs on GitHub rather than in repository documentation.
 
-## Working on the Project
+## Contributing
 
-For contribution and GitHub workflow rules, read [CONTRIBUTING.md](CONTRIBUTING.md).
+See [`CONTRIBUTING.md`](CONTRIBUTING.md) for the development and GitHub workflow.
 
-Coding agents must also follow [AGENTS.md](AGENTS.md).
-
-Use repository-relative links when adding documentation so that links remain valid across branches and local clones.
+Coding agents should additionally follow [`AGENTS.md`](AGENTS.md).

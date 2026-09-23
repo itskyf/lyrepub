@@ -1,102 +1,143 @@
 # Contributing
 
-This is a coursework repository. Keep the workflow traceable and lightweight.
+LyrePub is a small research coursework project. Keep collaboration reproducible, reviewable, and lightweight.
 
-## Development Workflow
+## Work Model
 
-Before starting substantive work:
+Repository work follows:
 
-1. read the Issue and its parent Goal, if any;
-2. verify that blocking Issues are resolved;
-3. assign yourself or otherwise establish ownership;
-4. read the relevant repository documentation and existing implementation.
+```text
+Issue → Pull Request → Merge
+```
 
-**Implementation gate:** Begin implementation only when the Issue has clear acceptance criteria, blockers are resolved, ownership is assigned, and no open Decision Issue affects it.
+Use GitHub's native work-management features rather than maintaining parallel planning systems.
 
-Keep changes scoped to the Issue.
+Each primitive has one purpose:
 
-If new independent work is discovered, create a separate Issue and connect it using the appropriate GitHub relationship.
+- **Milestone** — research phase or deliverable outcome.
+- **Issue** — a scoped unit of research, implementation, experiment, or decision work.
+- **Sub-issue** — decomposition of a larger Goal into independently completable work.
+- **Dependency** — a real blocking relationship between Issues.
+- **Assignee** — current ownership.
+- **Label** — classification when repeated filtering is useful.
+- **Pull Request** — reviewable changes to code, configuration, or durable documentation.
 
-## Issues and Decisions
+Do not duplicate status, phase, priority, or dependency information in labels or documentation. Do not introduce a Project board, custom workflow state, or additional planning system unless the project develops a concrete recurring need for one.
 
-### When to Use an Issue
+Use milestone due dates only for actual deadlines.
 
-Create or use an Issue for substantive:
+## Issues
 
-- implementation work;
-- experiments;
-- research-method changes;
-- design decisions;
-- discovered follow-up work.
+Use an Issue before substantive implementation or experimental work.
 
-A trivial typo or formatting correction may be submitted directly as a Pull Request.
+A sufficiently scoped Issue should make the following clear when relevant:
 
-### Issue Roles
+- context or question;
+- scope and explicit non-scope;
+- expected output or evidence;
+- acceptance criteria.
 
-Use three conceptual roles:
+Use three conceptual Issue roles:
 
-- **Goal** — a larger outcome consisting of several pieces of work.
-- **Task** — an executable unit of work.
-- **Decision** — an unresolved methodological or technical choice.
+- **Goal** — a larger research or delivery outcome;
+- **Task** — an executable unit of work;
+- **Decision** — an unresolved methodological or consequential technical choice.
 
-Use GitHub's native parent/sub-issue and blocking relationships rather than encoding dependencies only in prose.
+These roles do not require dedicated labels. Use native parent/sub-issue and dependency relationships where they represent real relationships.
 
-### Tracking
+Small typo or formatting corrections do not require an Issue.
 
-- Use milestones for project phases or deliverables.
-- Use labels only to classify work; prefer GitHub's default labels.
-- Use parent/sub-issue relationships for Goal → Task decomposition and issue dependencies for blockers.
-- Do not duplicate phase, status, or dependency information in labels.
+### Starting Work
 
-### Decision Lifecycle
+Before substantive work:
 
-Keep alternatives, evidence, and unresolved reasoning in the Decision Issue while the decision is open.
+1. understand the Issue and relevant parent Goal;
+2. confirm that required dependencies are resolved;
+3. establish ownership;
+4. read the repository documentation relevant to the task.
 
-Once a decision becomes durable:
+Begin implementation when scope and acceptance criteria are sufficiently clear to determine whether the work is complete.
 
-1. update the relevant repository documentation, code, or configuration through a Pull Request;
-2. merge the change;
-3. close the Decision Issue.
+## Research Decisions
 
-The closed Issue remains the rationale and decision history. The repository contains the current decision.
+The current research method is defined in [`docs/research/protocol.md`](docs/research/protocol.md).
 
-Do not create parallel `plan.md`, `status.md`, scratch documentation, Wiki pages, or ADRs unless the project develops a concrete need for them.
+Changes that materially alter research questions, experimental pathways, benchmark construction, evaluation methods, metrics, or acceptance criteria are research decisions rather than implementation details.
+
+For such a change:
+
+1. discuss alternatives and evidence in a Decision Issue;
+2. record the accepted method in the relevant durable documentation, configuration, or code through a Pull Request;
+3. merge the change;
+4. close the Decision Issue.
+
+The closed Issue preserves the rationale. The repository preserves the current method.
+
+Ordinary implementation choices that do not change the research method belong in the implementation Issue or Pull Request and do not require a separate decision process.
 
 ## During Work
 
-Update the Issue only when shared state materially changes, such as when a blocker is discovered, scope changes, a decision is required, or independent follow-up work is found.
+Keep the Issue body as the current work contract, not a chronological log.
 
-If work stops before completion, leave a concise handoff describing what is done, what remains, and any blocker or open question.
+If scope materially changes, update the Issue and leave a concise comment explaining why.
+
+If independent follow-up work is discovered, create a separate Issue and connect it using the appropriate native GitHub relationship.
+
+Use Issue comments for matters outside the code diff, such as:
+
+- scope;
+- methodology;
+- experimental evidence;
+- blockers;
+- handoff information.
+
+Use Pull Request review comments for findings about the proposed diff.
+
+Do not create parallel `plan.md`, `status.md`, research-log, or ADR systems without a demonstrated need.
 
 ## Pull Requests
 
-A Pull Request is the review boundary for completed work. Use draft PRs for early feedback; mark ready only after satisfying acceptance criteria and verification.
-Each PR should contain:
+Prefer one coherent concern per Pull Request.
 
-- a concise summary;
-- verification performed;
+A Pull Request should state:
+
+- what changed;
+- how it was verified;
 - any effect on research methodology or reproducibility;
-- `Closes #N` for the primary implementation Issue when appropriate.
+- the Issue it completes, using `Closes #N` when the entire Issue is satisfied.
 
-Prefer one coherent concern per PR.
+Use draft Pull Requests when early review is useful. Mark a Pull Request ready when its acceptance criteria and relevant verification are complete.
 
-An implementation session or commit does not make an Issue complete. Completion follows review and merge.
+Merge is the point at which a repository change becomes canonical.
 
-## Research and Documentation Changes
+## Development Tooling
 
-Do not rewrite methodology merely to fit observed results.
+Development tools are managed by [mise](https://mise.jdx.dev/getting-started.html) in `mise.toml`; linting and formatting are configured by [hk](https://hk.jdx.dev/getting_started.html) in `hk.pkl` (text-based configuration).
 
-A change to research questions, EDA definitions, benchmark construction, metrics, or acceptance criteria should first be treated as an explicit research decision.
+```shell
+mise install
+hk check --all
+hk run pre-commit
+```
 
-Scientific observations belong in Results. Their interpretation, threats to validity, rejected hypotheses, and limitations belong in the final report's Discussion and Limitations sections.
+Use `hk fix --all` when applying supported automatic fixes.
 
-Live progress and temporary reasoning belong on GitHub rather than in durable research documentation.
+## Research Reproducibility
 
-## Verification
+Use the smallest relevant checks that provide meaningful evidence that a change works.
 
-Before opening a PR:
+Depending on the work, reproducibility may require recording:
 
-- validate the change using the smallest relevant check that provides meaningful confidence in correctness;
-- report the validation performed in the PR;
-- ensure generated results remain reproducible from committed code and configuration;
-- avoid committing unnecessary generated or large binary artifacts.
+- source code;
+- dependency lockfiles;
+- model or tool version;
+- inference configuration;
+- preprocessing and evaluation procedure;
+- stable identifiers or checksums for external inputs;
+- scripts or commands needed to reproduce reported results.
+
+Do not create a general-purpose provenance or data-lineage system for information that can be reproduced adequately through normal project files and experiment artifacts.
+
+Do not commit unnecessary large generated files, raw datasets, model checkpoints, or audiobook assets. Prefer reproducible generation or externally managed inputs when appropriate.
+
+Research data, expected outputs, methodological criteria, or evaluation thresholds must not be changed merely to make an implementation or experiment pass.

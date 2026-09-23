@@ -1,52 +1,45 @@
 # AGENTS.md
 
-Repository-wide instructions for coding agents.
+Repository-wide instructions for coding agents working on LyrePub.
 
-## Operating Context
+Follow [`CONTRIBUTING.md`](CONTRIBUTING.md) for the GitHub workflow, research decisions, verification, and reproducibility requirements. Follow [`docs/research/protocol.md`](docs/research/protocol.md) for the current research scope and methodology.
 
-- Use `README.md` for the repository's source-of-truth map and `CONTRIBUTING.md` for the development workflow.
-- Treat GitHub Issues and Pull Requests as live work state; do not copy temporary progress, planning, or status into repository documentation.
-- Do not create parallel planning, status, decision, or scratch files unless explicitly requested.
-- When an Issue exists, keep implementation within its scope. Handle blockers, scope changes, and durable decisions through the workflow in `CONTRIBUTING.md`.
-- Do not commit or push until the implementation gate in CONTRIBUTING.md is satisfied.
+Consult additional documentation only when it is relevant to the task.
 
 ## Implementation
 
-### Code Style
-
-- Implement only what the current requirement needs; avoid speculative abstraction, configurability, or extensibility.
+- Implement the smallest clean solution that satisfies the current requirement.
+- Keep the project at research-coursework scale; avoid speculative abstractions, configurability, extensibility, or production infrastructure.
+- Prefer established libraries, standards, models, and checkpoints over custom implementations when they satisfy the requirement.
+- Reuse existing project structure and patterns before introducing new dependencies or frameworks.
 - Keep logic local unless extracting it clearly reduces duplication or complexity.
-- Follow the repository's existing formatter, linter, type-checker, naming conventions, and project structure.
-- Reuse existing project patterns before introducing new frameworks or dependencies.
-- Do not perform unrelated refactoring while implementing a task.
+- Do not perform unrelated refactoring.
+- Do not introduce workarounds or silent fallbacks that hide failures.
 - Do not silently change externally consumed schemas or persisted output formats.
 
-### Research-Sensitive Changes
+## Research-Sensitive Changes
 
-- Do not change research questions, EDA categories, benchmark sampling rules, evaluation metrics, acceptance criteria, or other methodological definitions as an implementation detail.
-- If implementation reveals that such a change is necessary, treat it as a methodological decision and follow the Decision workflow in `CONTRIBUTING.md` before making the new behavior canonical.
-- Preserve only the traceability needed to support the research method and interpret results; do not add lineage or provenance mechanisms unless explicitly required.
-- Do not modify experimental data, benchmark expectations, or expected results merely to make a test or evaluation pass.
+Do not redefine research methodology as an implementation detail.
 
-### Testing and Validation
+If a change would affect the research scope, experimental pathway, benchmark, evaluation method, metric, acceptance criterion, or other methodological choice, follow the research-decision process in `CONTRIBUTING.md` rather than making the change implicitly.
 
-- Validate changes using the smallest relevant check that provides meaningful confidence in correctness.
-- Use existing tests, targeted runs, sanity checks, known examples, or research evaluation as appropriate.
-- Do not add new automated tests unless the task explicitly requires them.
-- Do not change research data, benchmark expectations, or methodological criteria merely to make validation pass.
+## Linting and Static Analysis
 
-### Error Handling and Logging
+Treat the repository's configured linting, formatting, and static-analysis checks as constraints to satisfy.
 
-- Catch exceptions only when the code can recover, add useful context, or intentionally translate the failure. Catch the narrowest practical exception and preserve the original cause when translating it.
-- Prefer built-in exceptions unless callers genuinely need a project-specific failure type.
-- Make exception messages factual and specific: describe the failed operation and useful context without speculating about the cause.
-- Use the project's existing logging approach for runtime output; do not use `print` or introduce a separate logging framework.
-- Log useful milestones and diagnostic context, not routine implementation detail. Avoid logging the same failure repeatedly at multiple layers.
+- Fix the underlying code when a configured check reports a problem.
+- Do not suppress reported violations with `# noqa`, inline ignores, exclusions, per-file ignores, or equivalent mechanisms.
+- Do not modify linting, formatting, static-analysis, or hook configuration to make unrelated code pass.
+- Change tooling rules or configuration only when the current Issue explicitly requires a tooling/configuration change.
+- If a configured check appears incorrect or incompatible with the required implementation, report the conflict instead of bypassing it.
 
-### Code Comments and Docstrings
+## Code Comments and Docstrings
 
-- Use comments to explain non-obvious reasoning, assumptions, invariants, methodological constraints, or edge cases—not to narrate what the code already states.
-- Keep comments concise, factual, and direct. Avoid conversational narration, change history, or temporary reasoning that belongs in an Issue or PR.
-- Add docstrings to public, non-trivial, or otherwise non-obvious interfaces. Do not add docstrings to trivial helpers merely for completeness.
-- Write docstring summaries as direct imperative descriptions of behavior.
-- Document arguments, return semantics, side effects, exceptions, or constraints when they are relevant and not already clear from the interface.
+Use comments and docstrings only when they add information that is not already clear from the code.
+
+- Explain non-obvious reasoning, assumptions, invariants, methodological constraints, or edge cases.
+- Do not narrate control flow or restate the implementation as numbered steps.
+- Keep comments concise, factual, and current; do not include conversational reasoning, change history, or temporary notes.
+- Add docstrings to public, non-trivial, or otherwise non-obvious interfaces; do not add them to trivial helpers merely for completeness.
+- Keep docstring summaries concise and direct.
+- Document arguments, return behavior, side effects, exceptions, or constraints only when they are relevant and not already evident from the interface.
