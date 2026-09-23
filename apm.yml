@@ -13,4 +13,7 @@ includes: auto
 scripts: {}
 devDependencies:
   apm:
+    - github/awesome-copilot/skills/conventional-branch#main
+    - github/awesome-copilot/skills/conventional-commit#main
     - github/awesome-copilot/skills/github-issues#main
+    - github/awesome-copilot/skills/github-release#main
