@@ -1,14 +1,15 @@
----
-title: Pull Request
----
-
 ## Summary
+
+<!-- What changed and why? -->
 
 ## Verification
 
+<!-- How was this change verified? -->
+
 ## Research / reproducibility impact
 
-- [ ] None
-- [ ] Updates methodology/configuration/artifacts
+<!-- State "None" or describe any effect on methodology, configuration, experimental artifacts, or reproducibility. -->
 
-Closes #
+## Related issue
+
+<!-- Use "Closes #N" only when merging this PR fully completes the issue. Otherwise reference the issue without a closing keyword. -->

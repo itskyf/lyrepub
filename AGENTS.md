@@ -2,7 +2,11 @@
 
 Repository-wide instructions for coding agents working on LyrePub.
 
-Follow [`CONTRIBUTING.md`](CONTRIBUTING.md) for the GitHub workflow, research decisions, verification, and reproducibility requirements. Follow [`docs/research/protocol.md`](docs/research/protocol.md) for the current research scope and methodology.
+Use the repository documentation according to these sources of truth:
+
+- Follow [`README.md`](README.md) for repository setup and local usage.
+- Follow [`CONTRIBUTING.md`](CONTRIBUTING.md) for collaboration and the GitHub workflow.
+- Follow [`docs/research/protocol.md`](docs/research/protocol.md) for the current research scope and methodology.
 
 Consult additional documentation only when it is relevant to the task.
 
