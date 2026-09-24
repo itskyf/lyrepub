@@ -92,18 +92,24 @@ Ordinary implementation choices that do not change the research method belong in
 
 Keep the Issue body as the current work contract, not a chronological log.
 
-If scope materially changes, update the Issue body and leave a concise comment explaining the change.
+If scope or completion criteria materially change, update the Issue body and leave a concise comment explaining why.
 
-If independent follow-up work is discovered, create another Issue only when it needs separate tracking. Use a sub-issue or dependency relationship when that relationship is real.
+Do not post routine progress updates, command transcripts, environment details, or repeated verification results to Issues.
 
-Use Issue comments for matters outside the proposed diff, such as:
+Use Issue comments only when the information affects the tracked work, such as:
 
-- scope or methodological discussion;
-- experimental evidence;
-- blockers;
-- significant findings or handoff information.
+- a blocker or meaningful scope change;
+- a consequential research or methodological decision;
+- a material experimental or validation finding that changes the interpretation or next step.
 
-Use Pull Request review comments for findings about the proposed diff.
+Include only the evidence needed to understand the finding or make the decision.
+Keep reproducibility details in the relevant version-controlled source, configuration, results, or documentation.
+
+Once a Pull Request exists, discuss implementation and verification of the proposed changes there.
+Use review comments for feedback tied to the diff.
+Do not duplicate the same record in both the Issue and Pull Request; link between them instead.
+
+Create follow-up Issues only when the work genuinely needs separate tracking, review, or completion.
 
 Do not create parallel `plan.md`, `status.md`, research-log, ADR, or similar tracking systems without a demonstrated need.
 

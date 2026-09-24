@@ -85,7 +85,7 @@ apm install
 - `hk.pkl`: Repository formatting, linting, and validation checks
 - GitHub Issues: Scoped research, implementation, experiment, and decision work
 - GitHub Milestones: Groups of work contributing to meaningful research or deliverable outcomes
-- Pull Requests: Review boundary for repository changes
+- Pull Requests: Review boundary for repository changes and verification
 
 Live work status, ownership, dependencies, and milestone progress belong on GitHub rather than in repository documentation.
 

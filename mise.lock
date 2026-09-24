@@ -77,6 +77,30 @@ checksum = "sha256:b3cb8ab5958393faacefabfb3a402060eb256b1fda8e1f83c74c3fc877ebf
 url = "https://github.com/jdx/hk/releases/download/v2.0.1/hk-x86_64-pc-windows-msvc.zip"
 signer = "sigstore-oidc:https://github.com/jdx/hk/.github/workflows/release.yml"
 
+[[tools.java]]
+version = "27.0.0"
+backend = "core:java"
+specifiers = ["latest"]
+
+[tools.java.options]
+shorthand_vendor = "openjdk"
+
+[tools.java."platforms.linux-arm64"]
+checksum = "sha256:da4e9dde1fff90204739e969187bab4751bd59a2a1c479672e1a1810f7dd23ea"
+url = "https://download.java.net/java/GA/jdk27/55ce5470a6294008af0057ff4626d0e5/35/GPL/openjdk-27_linux-aarch64_bin.tar.gz"
+
+[tools.java."platforms.linux-x64"]
+checksum = "sha256:95fc37eb3a18a27a26d5904c2d89d52bace8dafa9a078ca27f4747fbc4bf070b"
+url = "https://download.java.net/java/GA/jdk27/55ce5470a6294008af0057ff4626d0e5/35/GPL/openjdk-27_linux-x64_bin.tar.gz"
+
+[tools.java."platforms.macos-arm64"]
+checksum = "sha256:ff42134c1bc5ac81c5a91a95fd4df87479db5d0499ba875d6adb5bda5626c3e8"
+url = "https://download.java.net/java/GA/jdk27/55ce5470a6294008af0057ff4626d0e5/35/GPL/openjdk-27_macos-aarch64_bin.tar.gz"
+
+[tools.java."platforms.windows-x64"]
+checksum = "sha256:41172837168dd25a8d9fe5eb253ac1efc568c5f9ff608144bcacadfdf50f876c"
+url = "https://download.java.net/java/GA/jdk27/55ce5470a6294008af0057ff4626d0e5/35/GPL/openjdk-27_windows-x64_bin.zip"
+
 [[tools.lychee]]
 version = "0.24.2"
 backend = "aqua:lycheeverse/lychee"
@@ -215,6 +239,128 @@ provenance = "github-attestations"
 version = "0.2.76"
 backend = "aqua:rvben/rumdl"
 specifiers = ["latest"]
+
+[tools.rumdl."platforms.linux-arm64"]
+checksum = "sha256:a8a3a89bc0e1ebe92d1e5084a3785a1cce8189f02a1b3a08a69c55f53bbea967"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.76/rumdl-v0.2.76-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/583329267"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.linux-arm64-musl"]
+checksum = "sha256:ef4f1a707dad07f2fcfe207959ed03f2de6e0e0ff9e0c236dd64e89d88d75758"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.76/rumdl-v0.2.76-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/583329276"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.linux-x64"]
+checksum = "sha256:90a8589a34cdc9aa50c9cf9a2b1e41837afe16bb11b2a7ace2e05dfb56a51176"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.76/rumdl-v0.2.76-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/583329282"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.linux-x64-musl"]
+checksum = "sha256:0fe0c75a72849e877a779538d550cbefb2b4656911de188dac54067995a6ae2f"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.76/rumdl-v0.2.76-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/583329275"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.macos-arm64"]
+checksum = "sha256:10ec95ee46e1d3f67560250db97725681a5fa4bc488f383615cc54b06c4bdbc7"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.76/rumdl-v0.2.76-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/583329273"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.macos-x64"]
+checksum = "sha256:415df77d4c5d11f336733c9570a72cd0a188d8e6a7460a76134c4c033ec5ece7"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.76/rumdl-v0.2.76-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/583329272"
+provenance = "github-attestations"
+
+[tools.rumdl."platforms.windows-x64"]
+checksum = "sha256:f7efe829339cd70c13a5b9d0f334094e4c1c30f935fa143edd4d5d8839746655"
+url = "https://github.com/rvben/rumdl/releases/download/v0.2.76/rumdl-v0.2.76-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/rvben/rumdl/releases/assets/583329269"
+provenance = "github-attestations"
+
+[[tools.shellharden]]
+version = "4.3.2"
+backend = "aqua:anordal/shellharden"
+specifiers = ["latest"]
+
+[tools.shellharden."platforms.linux-arm64"]
+checksum = "sha256:ba7e480234c0acd0493b21446e19db430afc522c7f22553f3c11d839d997ec04"
+url = "https://github.com/anordal/shellharden/releases/download/v4.3.2/shellharden-aarch64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/anordal/shellharden/releases/assets/459691215"
+
+[tools.shellharden."platforms.linux-arm64-musl"]
+checksum = "sha256:299a1922ab716e23f960024aca1cdacaf485d3d932b6d65033deb6ea3606fe26"
+url = "https://github.com/anordal/shellharden/releases/download/v4.3.2/shellharden-aarch64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/anordal/shellharden/releases/assets/459691178"
+
+[tools.shellharden."platforms.linux-x64"]
+checksum = "sha256:e81e97bc6bccff59b826d3b39328ab19b26721a236440f740ba71754531c7286"
+url = "https://github.com/anordal/shellharden/releases/download/v4.3.2/shellharden-x86_64-unknown-linux-gnu.tar.gz"
+url_api = "https://api.github.com/repos/anordal/shellharden/releases/assets/459690751"
+
+[tools.shellharden."platforms.linux-x64-musl"]
+checksum = "sha256:270527e7cb76f39d980914d93b235ff056bfda22bb85de53469c7f2d42bf3751"
+url = "https://github.com/anordal/shellharden/releases/download/v4.3.2/shellharden-x86_64-unknown-linux-musl.tar.gz"
+url_api = "https://api.github.com/repos/anordal/shellharden/releases/assets/459691208"
+
+[tools.shellharden."platforms.macos-arm64"]
+checksum = "sha256:4279643d791619f7ce4a3fbdedb0cefd51916cd5d64b2956cb1e69df744678ec"
+url = "https://github.com/anordal/shellharden/releases/download/v4.3.2/shellharden-aarch64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/anordal/shellharden/releases/assets/459690669"
+
+[tools.shellharden."platforms.macos-x64"]
+checksum = "sha256:6996f9d05fcc4fccfba3aac068552d38b2b08c99e51e5e15c3f8beab207e4baf"
+url = "https://github.com/anordal/shellharden/releases/download/v4.3.2/shellharden-x86_64-apple-darwin.tar.gz"
+url_api = "https://api.github.com/repos/anordal/shellharden/releases/assets/459690672"
+
+[tools.shellharden."platforms.windows-x64"]
+checksum = "sha256:cf08b4d13b1a3b34046d83ea8cf13b4fcf8a99b103a83d74283921c9c45a2e9f"
+url = "https://github.com/anordal/shellharden/releases/download/v4.3.2/shellharden-x86_64-pc-windows-msvc.zip"
+url_api = "https://api.github.com/repos/anordal/shellharden/releases/assets/459690908"
+
+[[tools.shfmt]]
+version = "3.14.1"
+backend = "aqua:mvdan/sh"
+specifiers = ["latest"]
+
+[tools.shfmt."platforms.linux-arm64"]
+checksum = "sha256:5f2db09dae91fca848f7adbdd014632e921a383863a2ad7e0450ad3aba0c6489"
+url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_arm64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320869"
+
+[tools.shfmt."platforms.linux-arm64-musl"]
+checksum = "sha256:5f2db09dae91fca848f7adbdd014632e921a383863a2ad7e0450ad3aba0c6489"
+url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_arm64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320869"
+
+[tools.shfmt."platforms.linux-x64"]
+checksum = "sha256:76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf"
+url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320883"
+
+[tools.shfmt."platforms.linux-x64-musl"]
+checksum = "sha256:76e77641faa025814b77f153b29796b8e6fa2fca03e0c76a691608b86c7ea7bf"
+url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_linux_amd64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320883"
+
+[tools.shfmt."platforms.macos-arm64"]
+checksum = "sha256:b7c872db63553ccffc7253aba3ed7d4885a27d83f1ba567b1138c6315a5847e5"
+url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_darwin_arm64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320930"
+
+[tools.shfmt."platforms.macos-x64"]
+checksum = "sha256:d33eee0da0f92835b3562e9767a05cee7e4eaeef47daa03bfd09da17b4b590a6"
+url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_darwin_amd64"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320946"
+
+[tools.shfmt."platforms.windows-x64"]
+checksum = "sha256:13629ce28442ca80b6b5a819f7574ab39e1c28c6e26734ca816c9714e04851df"
+url = "https://github.com/mvdan/sh/releases/download/v3.14.1/shfmt_v3.14.1_windows_amd64.exe"
+url_api = "https://api.github.com/repos/mvdan/sh/releases/assets/547320827"
 
 [[tools.tombi]]
 version = "1.5.5"

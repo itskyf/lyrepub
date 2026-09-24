@@ -25,6 +25,10 @@ steps {
     depends = "ruff"
   }
 
+  // Shell
+  ["shellharden"] = Builtins.shellharden
+  ["shfmt"] = Builtins.shfmt
+
   // Special Purpose
   ["byte-order-marker"] = Builtins.byte_order_marker
   ["check-added-large-files"] = Builtins.check_added_large_files
