@@ -63,12 +63,12 @@ Text preprocessing may derive forms needed for synthesis, recognition, or alignm
 Before final experiments, characterize only source properties that can materially affect the evaluated pathways, such as:
 
 - document and chapter structure;
-- normalization-sensitive text;
-- relevant foreign-language spans;
+- TTS-relevant text strata adapted from complex-text robustness research: ordinary text, number/date expressions, named entities, long text, code-switched or mixed-language text, and punctuation-related structures;
 - audiobook track or chapter correspondence;
 - inserted, omitted, repeated, or edition-mismatched audiobook content.
 
-Use these observations to construct representative and difficult test cases rather than an exhaustive linguistic profile of the books.
+Use these observations to construct representative and challenge test cases rather than an exhaustive linguistic profile of the books.
+The text strata organize source characterization and do not imply a difficulty ranking or aggregate score.
 
 ## 5. Audio Pathways
 
@@ -216,3 +216,4 @@ Implementation choices that do not alter the research method do not require prot
 - W3C, [EPUB 3.3](https://www.w3.org/TR/epub/)
 - W3C, [EPUB Accessibility 1.1](https://www.w3.org/TR/epub-a11y-11/)
 - W3C, [EPUB Accessibility Techniques 1.1](https://www.w3.org/TR/epub-a11y-tech-11/)
+- T. Zuo et al., ["Complex-Text Robustness Evaluation and Failure Diagnosis for Low-Resource Multilingual Text-to-Speech"](https://arxiv.org/abs/2609.11545), 2026.

@@ -45,6 +45,7 @@ CURL_ARGS=(
 	--remove-on-error
 )
 
+# https://dtv-ebook.com.vn/dem-hoi-long-tri_6504.html
 printf '\nIngesting: Đêm hội Long Trì — EPUB\n' >&2
 
 curl "${CURL_ARGS[@]}" \
@@ -72,6 +73,7 @@ for i in "${!DEM_HOI_AUDIO_URLS[@]}"; do
 		"${DEM_HOI_AUDIO_URLS[$i]}"
 done
 
+# https://dtv-ebook.com.vn/ebook-thang-long-noi-gian-hoang-quoc-hai-full-prc-pdf-epub-azw3-tieu-thuyet_3084.html
 printf '\nIngesting: Thăng Long nổi giận — EPUB\n' >&2
 
 curl "${CURL_ARGS[@]}" \

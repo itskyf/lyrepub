@@ -1,1 +1,4 @@
 exclude_path = ["(^|/)mise\\.lock$"]
+
+[hosts."dtv-ebook.com.vn"]
+# accept = [200, 403] # TODO: uncomment in v0.25.0
