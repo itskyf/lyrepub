@@ -1,17 +1,15 @@
 """Scan bronze EPUB sources for processing-relevant properties (Issue #11).
 
-Computes inexpensive, interpretable per-block features for both books:
-character length, digit/number/date-like forms, punctuation types and
-density, adjacent repetition, and a Unicode/source-quality inventory.
-Named-entity and language evidence are model-derived and collected on
-Colab separately. Results are source observations, not difficulty scores.
+Per block: character length, digit/number/date forms, punctuation types
+and density, adjacent repetition, sentence counts and lengths (SaT), and
+a Unicode/source-quality inventory. Entity and language evidence comes
+from scripts/screen_ner.py. Source observations, not difficulty scores.
 
 Usage:
-    pixi run -e dev python scripts/scan_sources.py
+    pixi run --environment dev python scripts/scan_sources.py
 
-Writes ``data/silver/blocks.csv`` (per-block features) and
-``data/silver/scan_summary.txt`` (human-readable summary); logs the same
-summary to stdout.
+Writes data/silver/blocks.csv and data/silver/scan_summary.txt; logs the
+same summary to stdout.
 """
 
 import csv
@@ -24,6 +22,7 @@ from itertools import islice
 from pathlib import Path
 
 from lyrepub.epub_text import Block, extract_blocks
+from lyrepub.segmentation import segment_sentences
 
 logger = logging.getLogger("scan")
 
@@ -199,6 +198,23 @@ def quality_inventory(
     return lines
 
 
+def sentence_stats(blocks: list[Block], rows: list[dict[str, object]]) -> list[str]:
+    """Add per-block sentence counts and return length-distribution lines."""
+    lengths: list[int] = []
+    for row, block in zip(rows, blocks, strict=True):
+        sentences = segment_sentences(block.text)
+        row["sent_count"] = len(sentences)
+        lengths.extend(len(sentence) for sentence in sentences)
+    median = statistics.median(lengths)
+    return [
+        (
+            f"sentence_len: count={len(lengths)} min={min(lengths)} "
+            f"median={median:.0f} p90={_percentile(lengths, 0.90)} "
+            f"p99={_percentile(lengths, 0.99)} max={max(lengths)}"
+        )
+    ]
+
+
 def main() -> None:
     logging.basicConfig(level=logging.INFO, format="%(message)s")
     silver = REPO_ROOT / "data" / "silver"
@@ -214,6 +230,7 @@ def main() -> None:
             texts[(isbn, b.spine_index, b.block_index)] = b.text
         all_rows.extend(rows)
         summary.extend(summarize(isbn, rows, texts))
+        summary.extend(sentence_stats(blocks, rows))
     summary.extend(quality_inventory(all_rows, texts))
 
     fieldnames = list(all_rows[0])
