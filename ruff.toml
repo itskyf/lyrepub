@@ -40,5 +40,8 @@ select = [
   "W",  # pycodestyle
 ]
 
+[lint.per-file-ignores]
+"tests/**" = ["S101", "PLR2004"]
+
 [lint.pydocstyle]
 convention = "google"
