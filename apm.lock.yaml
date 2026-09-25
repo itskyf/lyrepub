@@ -125,187 +125,44 @@ dependencies:
     .claude/skills/github-release/references/semver-rules.md: sha256:96b607e4189eea07c77728081e9c69f17898cdce5b91bd2e3c03c42ea4b2ba2c
   content_hash: sha256:89dd98ca83f681dd7580c73c8d0dadcf8adffc6e9a9d5acc1b7acf6c66826467
   is_dev: true
+- repo_url: googlecolab/google-colab-cli
+  name: colab-operator
+  host: github.com
+  resolved_commit: e25c2655c7ff2fffb7e6c493c51a910d5c461a0b
+  resolved_ref: v0.7.2
+  version: unknown
+  virtual_path: skills/colab-operator
+  is_virtual: true
+  package_type: claude_skill
+  deployed_files:
+  - .agents/skills/colab-operator
+  - .agents/skills/colab-operator/SKILL.md
+  - .claude/skills/colab-operator
+  - .claude/skills/colab-operator/SKILL.md
+  deployed_file_hashes:
+    .agents/skills/colab-operator/SKILL.md: sha256:b2b0de427e748a74c5c79f889713b96cc3ce4f72251cfe6c1419f4cb70def2f1
+    .claude/skills/colab-operator/SKILL.md: sha256:b2b0de427e748a74c5c79f889713b96cc3ce4f72251cfe6c1419f4cb70def2f1
+  content_hash: sha256:e687812cde5980a8498847d76da9b8be1318f86fdd6a64885c67771bebd64d4f
+  is_dev: true
 deployments:
 - kind: project-relative
-  target: antigravity
-  value: .agents/skills/conventional-branch
+  target: claude
+  value: .claude/skills/colab-operator
   runtime: null
   scope: project
   owners:
-  - github/awesome-copilot/skills/conventional-branch
-  active_owner: github/awesome-copilot/skills/conventional-branch
+  - googlecolab/google-colab-cli/skills/colab-operator
+  active_owner: googlecolab/google-colab-cli/skills/colab-operator
   content_hash: null
 - kind: project-relative
-  target: antigravity
-  value: .agents/skills/conventional-branch/SKILL.md
+  target: claude
+  value: .claude/skills/colab-operator/SKILL.md
   runtime: null
   scope: project
   owners:
-  - github/awesome-copilot/skills/conventional-branch
-  active_owner: github/awesome-copilot/skills/conventional-branch
-  content_hash: sha256:94b962ff93ac639c8b760a29465ca48f51d6af1ad1b4bdd242d52f1260959b07
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/conventional-commit
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/conventional-commit
-  active_owner: github/awesome-copilot/skills/conventional-commit
-  content_hash: null
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/conventional-commit/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/conventional-commit
-  active_owner: github/awesome-copilot/skills/conventional-commit
-  content_hash: sha256:250235f71b8c501a7744ded911281292324bcd1a2d014e34b25041e2d2c8bf73
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: null
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:c7859f993a8c8cfbff117830be1532e82e8b8e913297a40f8e685a662eaf3183
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/dependencies.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:9503d23ba104de1aae51176e4f29d3cf6b85c83e3421252a4808140d60eba571
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/images.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:585c89a02e1b79e702b4b88f2771cb8dadca9fdf98798ca72a83deb76623b219
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/issue-fields.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:ebc49ce1c436213a2c2c9ffef770ff46bc8b4f4ef1ec84460f217b712d1df01c
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/issue-types.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:be0a33a4a4a15ce92c6b589f19943813b69c25cd1f20e9e30df567bab50e5e63
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/labels.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:d00f8f0414b3cb0b8f45d48956ee8d301aefea5338f5a45eccca04b68a26bb6c
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/milestones.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:974d492c055297df2efb6631c40ca8ceb821c52188b2719ecfeb69cc8df91c36
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/projects.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:358071bc9915a50e86956b21ba1c0077b489d8981eddc63ea09aa4cfe1043710
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/search.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:e73499b778efaaac7a90fd6a7c0359f30a89a7a62c25b27d994274e7f7ae172e
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/sub-issues.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:333339143e4a4ef0dfeb575cf0f18da2ca78d6388e2b9ba4b77daad7c1ce29a8
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-issues/references/templates.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-issues
-  active_owner: github/awesome-copilot/skills/github-issues
-  content_hash: sha256:8202c0277a34033acd44ed960a236f31a5b7a74d98769dffac497f2267279fed
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-release
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-release
-  active_owner: github/awesome-copilot/skills/github-release
-  content_hash: null
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-release/SKILL.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-release
-  active_owner: github/awesome-copilot/skills/github-release
-  content_hash: sha256:7ef644b19c8f87b09be121efdb3fc946c3354bb48ce6ec841ebb56384ee4c431
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-release/references/commit-classification.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-release
-  active_owner: github/awesome-copilot/skills/github-release
-  content_hash: sha256:61c0d5145358aea2fa5984364513d880d757a0946432ee074ffbadc8d0e47626
-- kind: project-relative
-  target: antigravity
-  value: .agents/skills/github-release/references/semver-rules.md
-  runtime: null
-  scope: project
-  owners:
-  - github/awesome-copilot/skills/github-release
-  active_owner: github/awesome-copilot/skills/github-release
-  content_hash: sha256:96b607e4189eea07c77728081e9c69f17898cdce5b91bd2e3c03c42ea4b2ba2c
+  - googlecolab/google-colab-cli/skills/colab-operator
+  active_owner: googlecolab/google-colab-cli/skills/colab-operator
+  content_hash: sha256:b2b0de427e748a74c5c79f889713b96cc3ce4f72251cfe6c1419f4cb70def2f1
 - kind: project-relative
   target: claude
   value: .claude/skills/conventional-branch
@@ -480,6 +337,204 @@ deployments:
 - kind: project-relative
   target: claude
   value: .claude/skills/github-release/references/semver-rules.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-release
+  active_owner: github/awesome-copilot/skills/github-release
+  content_hash: sha256:96b607e4189eea07c77728081e9c69f17898cdce5b91bd2e3c03c42ea4b2ba2c
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/colab-operator
+  runtime: null
+  scope: project
+  owners:
+  - googlecolab/google-colab-cli/skills/colab-operator
+  active_owner: googlecolab/google-colab-cli/skills/colab-operator
+  content_hash: null
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/colab-operator/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - googlecolab/google-colab-cli/skills/colab-operator
+  active_owner: googlecolab/google-colab-cli/skills/colab-operator
+  content_hash: sha256:b2b0de427e748a74c5c79f889713b96cc3ce4f72251cfe6c1419f4cb70def2f1
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/conventional-branch
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/conventional-branch
+  active_owner: github/awesome-copilot/skills/conventional-branch
+  content_hash: null
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/conventional-branch/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/conventional-branch
+  active_owner: github/awesome-copilot/skills/conventional-branch
+  content_hash: sha256:94b962ff93ac639c8b760a29465ca48f51d6af1ad1b4bdd242d52f1260959b07
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/conventional-commit
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/conventional-commit
+  active_owner: github/awesome-copilot/skills/conventional-commit
+  content_hash: null
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/conventional-commit/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/conventional-commit
+  active_owner: github/awesome-copilot/skills/conventional-commit
+  content_hash: sha256:250235f71b8c501a7744ded911281292324bcd1a2d014e34b25041e2d2c8bf73
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: null
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:c7859f993a8c8cfbff117830be1532e82e8b8e913297a40f8e685a662eaf3183
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/dependencies.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:9503d23ba104de1aae51176e4f29d3cf6b85c83e3421252a4808140d60eba571
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/images.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:585c89a02e1b79e702b4b88f2771cb8dadca9fdf98798ca72a83deb76623b219
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/issue-fields.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:ebc49ce1c436213a2c2c9ffef770ff46bc8b4f4ef1ec84460f217b712d1df01c
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/issue-types.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:be0a33a4a4a15ce92c6b589f19943813b69c25cd1f20e9e30df567bab50e5e63
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/labels.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:d00f8f0414b3cb0b8f45d48956ee8d301aefea5338f5a45eccca04b68a26bb6c
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/milestones.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:974d492c055297df2efb6631c40ca8ceb821c52188b2719ecfeb69cc8df91c36
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/projects.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:358071bc9915a50e86956b21ba1c0077b489d8981eddc63ea09aa4cfe1043710
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/search.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:e73499b778efaaac7a90fd6a7c0359f30a89a7a62c25b27d994274e7f7ae172e
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/sub-issues.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:333339143e4a4ef0dfeb575cf0f18da2ca78d6388e2b9ba4b77daad7c1ce29a8
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-issues/references/templates.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-issues
+  active_owner: github/awesome-copilot/skills/github-issues
+  content_hash: sha256:8202c0277a34033acd44ed960a236f31a5b7a74d98769dffac497f2267279fed
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-release
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-release
+  active_owner: github/awesome-copilot/skills/github-release
+  content_hash: null
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-release/SKILL.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-release
+  active_owner: github/awesome-copilot/skills/github-release
+  content_hash: sha256:7ef644b19c8f87b09be121efdb3fc946c3354bb48ce6ec841ebb56384ee4c431
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-release/references/commit-classification.md
+  runtime: null
+  scope: project
+  owners:
+  - github/awesome-copilot/skills/github-release
+  active_owner: github/awesome-copilot/skills/github-release
+  content_hash: sha256:61c0d5145358aea2fa5984364513d880d757a0946432ee074ffbadc8d0e47626
+- kind: project-relative
+  target: legacy
+  value: .agents/skills/github-release/references/semver-rules.md
   runtime: null
   scope: project
   owners:

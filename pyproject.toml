@@ -10,11 +10,15 @@ dependencies = [
 dynamic = ["version"]
 
 [dependency-groups]
-dev = ["ipykernel>=7.3.0,<8", "pytest>=9.1.1,<10", "pytest-asyncio>=1.4.0,<2"]
+dev = ["google-colab-cli>=0.7.2,<0.8", "ipykernel>=7.3.0,<8", "pytest>=9.1.1,<10", "pytest-asyncio>=1.4.0,<2"]
 
 [build-system]
 requires = ["setuptools", "setuptools-scm"]
 build-backend = "setuptools.build_meta"
+
+[tool.pixi.feature.dev.pypi-options.dependency-overrides]
+# Colab CLI 0.7.2 needs Google's JKC fork; remove when a released CLI resolves a compatible JKC without this override.
+jupyter-kernel-client = { git = "https://github.com/googlecolab/jupyter-kernel-client.git", rev = "f18e982c3265df5e923aa9def101ab3fd737e139" }
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]
@@ -33,3 +37,4 @@ dev = { features = ["dev"], solve-group = "default" }
 cxx-compiler = ">=2.0.0,<3"
 ffmpeg = ">=9.0.1,<10"
 openfst = ">=1.8.4,<2"
+python = ">=3.13,<3.14"
