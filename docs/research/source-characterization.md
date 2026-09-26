@@ -30,8 +30,9 @@ the repository root; bronze sources fetched via
 | `*.ffprobe.json`, `audiobook_tracks.csv`, `audiobook_report.txt` | `./scripts/inspect_audiobook.sh` then `pixi run --environment dev python scripts/inspect_audiobook.py` |
 
 Key tool versions: fast-ebook 0.2.0, lingua-language-detector 2.2.0,
-ffprobe 9.0.2; model checkpoints and revisions are recorded in
-`data/silver/ner_report.txt` and the segmentation reports.
+ffprobe 9.0.2; the selected NER and SaT checkpoints and their revisions
+are pinned in their committed source modules (`src/lyrepub/ner.py`,
+`src/lyrepub/segmentation.py`).
 
 ## EPUB structure
 
@@ -114,14 +115,14 @@ Book 1: p99 1,512, max 3,427 chars; the longest block is
 
 ### Code-switched and mixed-language text
 
-Manual judgement from the mixed-language screen
-(`language_mixing_report.txt`; lingua 2.2.0 `detect_multiple_languages_of`
-over all 4,568 blocks, 263 flagged). The detector's experimental span mode
-is dominated by noise on this corpus: tiny non-Vietnamese spans on ordinary
-Vietnamese text (e.g. "An Nam" repeatedly labeled Zulu; short play dialogue
-labeled Tagalog/Sotho/Ganda in book 2), so its output is used only to
-surface candidates; every non-Vietnamese span in the flagged blocks was
-read. Confirmed observations:
+The mixed-language screen (`language_mixing_report.txt`; lingua 2.2.0
+`detect_multiple_languages_of` over all 4,568 blocks, 263 flagged) is
+automated candidate evidence, not a reference annotation: the detector's
+experimental span mode is dominated by noise on this corpus — tiny
+non-Vietnamese spans on ordinary Vietnamese text (e.g. "An Nam" repeatedly
+labeled Zulu; short play dialogue labeled Tagalog/Sotho/Ganda in book 2).
+Manual judgement (every non-Vietnamese span in the flagged blocks was
+read) confirmed:
 
 - One confirmed foreign-language phrase, in book 1: the French title in
   `9786045633946 s12 Text/13.html #30 — "… Cuốn du ký (Le Livre de Marco Polo)…"`.
