@@ -2,20 +2,23 @@
 
 Selected in the Issue #11 screening for boundary correctness on the
 observed source phenomena; adds no stack beyond the existing
-torch/transformers dependencies. Checkpoint segment-any-text/sat-3l at
-revision a3b7ba6b61881d619989757aea971cde7d3d6a98, enforced at load time
-through from_pretrained_kwargs; the larger sat-12l and sat-12l-sm merge
-rapid question bursts and were rejected in the checkpoint comparison.
-The tokenizer stays SaT's default (facebookAI/xlm-roberta-base), which
-SaT loads without a revision argument — the one unpinned piece.
+torch/transformers dependencies. Checkpoint segment-any-text/sat-3l-sm
+at revision 137da054051ad9f1eac42025f758db4ac9f22535, enforced at load
+time through from_pretrained_kwargs. Checkpoint comparison on the frozen
+cases: sat-3l over-splits at commas and dashes (including spurious
+lone-dash sentences), the 12-layer variants merge rapid question bursts,
+while sat-3l-sm is exact on that common pattern and never fragments; its
+only coarseness is merging colon-introduced quotations. The tokenizer
+stays SaT's default (facebookAI/xlm-roberta-base), which SaT loads
+without a revision argument — the one unpinned piece.
 """
 
 from functools import lru_cache
 
 from wtpsplit import SaT
 
-SAT_NAME = "sat-3l"
-SAT_REVISION = "a3b7ba6b61881d619989757aea971cde7d3d6a98"
+SAT_NAME = "sat-3l-sm"
+SAT_REVISION = "137da054051ad9f1eac42025f758db4ac9f22535"
 
 
 @lru_cache(maxsize=1)

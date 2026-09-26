@@ -19,7 +19,7 @@ and enforced at load time. uv builds an isolated environment from the
 inline metadata, so no project dependency is touched:
 
     PYTHONPATH=src:scripts pixi run --environment dev uv run --script \\
-        scripts/screen_wtpsplit.py sat-3l
+        scripts/screen_wtpsplit.py sat-3l-sm
 
 Writes data/silver/segmentation_report_wtpsplit-<checkpoint>.txt.
 """
