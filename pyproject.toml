@@ -6,6 +6,7 @@ dependencies = [
   "fast-ebook>=0.2.0,<0.3",
   "nemo-text-processing @ git+https://github.com/itskyf/NeMo-text-processing@c3afd14899658d53920b2737ff4d7216d9a32c83?rev_type=rev",
   "transformers[torch]>=5.17.0,<6",
+  "wtpsplit>=2.2.2,<3",
 ]
 dynamic = ["version"]
 
@@ -19,6 +20,9 @@ build-backend = "setuptools.build_meta"
 [tool.pixi.feature.dev.pypi-options.dependency-overrides]
 # Colab CLI 0.7.2 needs Google's JKC fork; remove when a released CLI resolves a compatible JKC without this override.
 jupyter-kernel-client = { git = "https://github.com/googlecolab/jupyter-kernel-client.git", rev = "f18e982c3265df5e923aa9def101ab3fd737e139" }
+
+[tool.pixi.feature.dev.dependencies]
+uv = ">=0.12.19,<0.13"
 
 [tool.pixi.workspace]
 channels = ["conda-forge"]

@@ -1,3 +1,6 @@
+# Research data (re-fetch with scripts/fetch_release_sources.sh)
+data/
+
 # APM dependencies
 .agents/
 .claude/
