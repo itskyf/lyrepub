@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
-from defusedxml.ElementTree import fromstring
+from defusedxml import ElementTree
 from fast_ebook import epub
 
 _XHTML_NS = "http://www.w3.org/1999/xhtml"
@@ -80,7 +80,7 @@ def parse_blocks(
     Raises ValueError for malformed XML or missing XHTML document structure.
     """
     try:
-        root = fromstring(xhtml)
+        root = ElementTree.fromstring(xhtml)
     except ET.ParseError as exc:
         msg = f"invalid XHTML in {href}: {exc}"
         raise ValueError(msg) from exc

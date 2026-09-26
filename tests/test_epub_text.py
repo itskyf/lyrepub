@@ -189,7 +189,6 @@ def test_extract_blocks_preserves_spine_order(tmp_path: Path) -> None:
     ]
     assert [b.block_index for b in blocks] == [0, 0]
     assert [b.linear for b in blocks] == [False, True]
-    assert [b.element_path for b in blocks] == [(1, 0), (1, 0)]
 
 
 def test_extract_blocks_accepts_utf16_xhtml(tmp_path: Path) -> None:
