@@ -80,9 +80,9 @@ Book 2: 1,535 blocks, median 67, p90 282, p99 732, max 1741 — shorter,
 dialogue-shaped blocks. Dialogue-marker blocks
 (starting "- ") are 1,137 (37%) in book 1 and 787 (51%) in book 2. Sentence
 lengths (SaT segmentation): median 64/max 452 (book 1) and
-median 42/max 500 (book 2). No control, private-use, replacement, or
-non-Latin-unexpected characters were found in either book (Unicode/source
-quality inventory, `scan_summary.txt`).
+median 42/max 500 (book 2). No control/format/private-use/replacement
+characters, non-Latin letters, or unusual symbols were found in either
+book (Unicode/source quality inventory, `scan_summary.txt`).
 
 ### Number and date expressions
 
@@ -106,10 +106,10 @@ entity-rich cases include
 
 ### Long text
 
-Book 1 upper tail: 11 blocks exceed 2,000 chars; the longest block is
-`9786045633946 s5 Text/6.html #9 — "Phủ Chiêu Quốc không phải là phủ lớn nhất…"`,
-3,427 chars. Book 2's longest block is 1,741 chars
-(`s5 Text/section_5.html #132`).
+Book 1: p99 1,512, max 3,427 chars; the longest block is
+`9786045633946 s5 Text/6.html #9 — "Phủ Chiêu Quốc không phải là phủ lớn nhất…"`
+(3,427 chars). Book 2: p99 732, max 1,741; its longest block is
+`9786326186253 s5 Text/section_5.html #132`.
 
 ### Code-switched and mixed-language text
 
@@ -122,19 +122,17 @@ labeled Tagalog/Sotho/Ganda in book 2), so its output is used only to
 surface candidates; every non-Vietnamese span in the flagged blocks was
 read. Confirmed observations:
 
-- Book 1 contains a small set of genuine foreign-language content, all of
-  the same shape — original-language spellings in parentheses inside
-  Vietnamese prose:
-  `9786045633946 s12 Text/13.html #30 — "… sinh ở Venise (1254 – 1324) … dưới triều đại Hốt-tất-liệt (Koubilay) 16 năm … Cuốn du ký (Le Livre de Marco Polo)…"`,
-  `9786045633946 s18 Text/19.html #35 — "… Ta-khai Xa-ric (Tagai-sariq) bước ra can…"`,
-  `9786045633946 s19 Text/20.html #64 — "… (Aric Khaya)…"`, and
-  `9786045633946 s20 Text/21.html #191 — "… Mang-cổ-đải (Mangqudai)…"`.
-- Foreign proper names otherwise appear as Vietnamese transcriptions or
-  bare names in Vietnamese sentences (e.g. "Marco Polo" as sentence subject
-  in `s12 Text/13.html #37`, "Champa" in trade-context passages) — these
-  belong to the named-entity stratum rather than code-switching.
-- Book 2: no confirmed foreign-language or mixed-language content; all
-  flagged spans are plain Vietnamese dialogue or headings.
+- One confirmed foreign-language phrase, in book 1: the French title in
+  `9786045633946 s12 Text/13.html #30 — "… Cuốn du ký (Le Livre de Marco Polo)…"`.
+- Book 1 also contains several parenthetical original-form foreign proper
+  names — `(Koubilay)` in the same block, `(Tagai-sariq)` in
+  `s18 Text/19.html #35`, `(Aric Khaya)` in `s19 Text/20.html #64`,
+  `(Mangqudai)` in `s20 Text/21.html #191` — and foreign proper names in
+  Vietnamese sentences ("Marco Polo" as sentence subject in
+  `s12 Text/13.html #37`); these are proper names, handled primarily under
+  Named entities, not code-switching.
+- Book 2: no confirmed mixed-language content; all flagged spans are plain
+  Vietnamese dialogue or headings.
 
 ### Punctuation-related structures
 
@@ -181,11 +179,12 @@ and endings are recorded in the table below):
 | 7 | "Bảy, Trong vương phủ, đèn đuốc sáng trưng…" | `s9 #1` | "…nàng đã ngất trong tay ngài" | `s9 #86` (last block) |
 
 The resulting mapping (recorded in `TRACK_SECTION_CORRESPONDENCE` in
-`scripts/inspect_audiobook.py`): track 1 narrates s1 + s2 + s3 (the
-listening confirmed the author biography is read within track 1, after the
-opening announcement); tracks 2–7 narrate s4–s9 one-to-one. Every heard
-ending matches the final block of the mapped section. All 9 narratable
-spine documents are covered; s0 and s10 (image-only) have no audio.
+`scripts/inspect_audiobook.py`): within track 1, listening identified
+content from the author biography (s1), then LỜI NÓI ĐẦU (s2), before
+section I (s3) — so track 1 narrates s1 + s2 + s3; tracks 2–7 narrate
+s4–s9 one-to-one. Every heard ending matches the final block of the mapped
+section. All 9 narratable spine documents are covered; s0 and s10 contain
+no extracted text and require no text–audio mapping.
 
 Observed at the coarsest useful level:
 
@@ -214,7 +213,7 @@ Representative:
 | Location | Prefix | Property |
 | --- | --- | --- |
 | 9786326186253 s3 Text/section_3.html #1 | "Khi bọn Bảo Kim tới Bắc Cung thì hội mới bắt đầu khai mạc…" | ordinary narrative of the alignment-pathway book |
-| 9786045633946 s10 Text/11.html #42 | "Quang Khải nắm tay Quốc Tuấn cùng đi vào lâu thuyền…" | person-dense court narrative (typical entity load) |
+| 9786045633946 s10 Text/11.html #42 | "Quang Khải nắm tay Quốc Tuấn cùng đi vào lâu thuyền…" | person-dense court narrative (multiple person names) |
 | 9786045633946 s5 Text/6.html #26 | "Chính việc cha dặn bị vỡ lở…" | narrative carrying years and historical names |
 | 9786326186253 s6 Text/section_6.html #65 | "Nhưng Quận chúa lại tưởng là cha giận mà nói dỗi…" | dialogue with dash prefix and repetition |
 | 9786045633946 s15 Text/16.html #17 | "Cứ theo như Đỗ Vỹ tâu thì tháng bảy, ngày Mậu tí năm Giáp thân…" | lunar-era date expression with parenthetical conversion |
@@ -224,7 +223,7 @@ Challenge:
 | Location | Prefix | Property |
 | --- | --- | --- |
 | 9786045633946 s12 Text/13.html #68 | "Thu thập tin tức xong, Đỗ Vỹ bèn cho người gửi…" | mixed straight/curly quotes in one block |
-| 9786045633946 s12 Text/13.html #30 | "(Đây ám chỉ Marco Polo người Ý sinh ở Venise…" | genuine French/Italian content in parentheses |
+| 9786045633946 s12 Text/13.html #30 | "(Đây ám chỉ Marco Polo người Ý sinh ở Venise…" | French title phrase and foreign proper-name forms in Vietnamese prose |
 | 9786045633946 s18 Text/19.html #35 | "- Muôn tâu thượng hoàng, hạ thần đi đến địa giới tỉnh Hồ Nam…" | transcribed names with original forms "(Kulá)", "(Tagai-sariq)" |
 | 9786045633946 s2 Text/3.html #70 | "(Văn Thù: là một trong 8 vị đại Bồ Tát…" | slash-enumerated digit list inside parentheses |
 | 9786045633946 s5 Text/6.html #9 | "Phủ Chiêu Quốc không phải là phủ lớn nhất…" | longest block (3,427 chars), colons, quoted speech |
