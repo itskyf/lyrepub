@@ -87,7 +87,8 @@ book (Unicode/source quality inventory, `scan_summary.txt`).
 ### Number and date expressions
 
 Book 1: 149 digit runs in 93 blocks, 59 year-like values, 6 date-like
-values — concentrated in parenthetical historical notes, e.g.
+values; the digit-bearing blocks include parenthetical historical notes,
+e.g.
 `9786045633946 s2 Text/3.html #26 — "… (Năm 1274 nhà Nguyên tập Kinh Hồ đẳng xứ hành trung thư tỉnh. Năm 1277 gộp Ngạc Châu (Hồ Bắc) vào Đà…"`
 (nested parens, Western years, Sino-Vietnamese place names). Book 2 is
 number-sparse: 28 digit runs, 6 year-like, 0 date-like (e.g.
@@ -131,8 +132,9 @@ read. Confirmed observations:
   Vietnamese sentences ("Marco Polo" as sentence subject in
   `s12 Text/13.html #37`); these are proper names, handled primarily under
   Named entities, not code-switching.
-- Book 2: no confirmed mixed-language content; all flagged spans are plain
-  Vietnamese dialogue or headings.
+- Book 2: no mixed-language example was confirmed among the flagged
+  candidates; the flagged spans read as plain Vietnamese dialogue or
+  headings.
 
 ### Punctuation-related structures
 
@@ -179,12 +181,15 @@ and endings are recorded in the table below):
 | 7 | "Bảy, Trong vương phủ, đèn đuốc sáng trưng…" | `s9 #1` | "…nàng đã ngất trong tay ngài" | `s9 #86` (last block) |
 
 The resulting mapping (recorded in `TRACK_SECTION_CORRESPONDENCE` in
-`scripts/inspect_audiobook.py`): within track 1, listening identified
-content from the author biography (s1), then LỜI NÓI ĐẦU (s2), before
-section I (s3) — so track 1 narrates s1 + s2 + s3; tracks 2–7 narrate
-s4–s9 one-to-one. Every heard ending matches the final block of the mapped
-section. All 9 narratable spine documents are covered; s0 and s10 contain
-no extracted text and require no text–audio mapping.
+`scripts/inspect_audiobook.py`): track 1 narrates s1 + s2 + s3. Within
+track 1, listening identified the biographical content (s1, "Nhà văn
+NGUYỄN HUY TƯỞNG (1912 – 1960)… Quê quán: Dục Tú, Đông Anh, Hà Nội",
+`s1 Text/section_11.html #1–#3`), then the heading "LỜI NÓI ĐẦU" spoken
+aloud followed by "Năm 1942, khi tiểu thuyết Đêm hội Long Trì được đăng
+tải…" (`s2 Text/section_2.html #0–#1`), before section I (s3). Tracks 2–7
+narrate s4–s9 one-to-one. Every heard ending matches the final block of
+the mapped section. All 9 narratable spine documents are covered; s0 and
+s10 contain no extracted text and require no text–audio mapping.
 
 Observed at the coarsest useful level:
 
