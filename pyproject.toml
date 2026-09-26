@@ -3,7 +3,6 @@ name = "lyrepub"
 requires-python = ">= 3.13"
 authors = [{ name = "Kỳ", email = "40734986+itskyf@users.noreply.github.com" }]
 dependencies = [
-  "defusedxml>=0.7.1,<0.8",
   "fast-ebook>=0.2.0,<0.3",
   "nemo-text-processing @ git+https://github.com/itskyf/NeMo-text-processing@c3afd14899658d53920b2737ff4d7216d9a32c83?rev_type=rev",
   "transformers[torch]>=5.17.0,<6",
@@ -12,7 +11,7 @@ dependencies = [
 dynamic = ["version"]
 
 [dependency-groups]
-dev = ["google-colab-cli>=0.7.2,<0.8", "ipykernel>=7.3.0,<8", "pytest>=9.1.1,<10", "pytest-asyncio>=1.4.0,<2"]
+dev = ["defusedxml>=0.7.1,<0.8", "google-colab-cli>=0.7.2,<0.8", "ipykernel>=7.3.0,<8", "pytest>=9.1.1,<10", "pytest-asyncio>=1.4.0,<2"]
 
 [build-system]
 requires = ["setuptools", "setuptools-scm"]

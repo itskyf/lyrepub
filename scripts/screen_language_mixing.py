@@ -61,10 +61,11 @@ def _flagged(spans: list[DetectionResult]) -> bool:
     """True when spans contain a non-Vietnamese language or more than one.
 
     Languages are compared by ISO code because lingua's PyO3 enum members
-    do not satisfy identity comparison across accesses.
+    do not satisfy identity comparison across accesses. Blocks with no
+    detected spans are not flagged.
     """
     languages = {_iso(span.language) for span in spans}
-    return len(languages) > 1 or _VIETNAMESE not in languages
+    return bool(languages) and (len(languages) > 1 or _VIETNAMESE not in languages)
 
 
 def _span_line(text: str, span: DetectionResult) -> str:

@@ -56,7 +56,8 @@ def _navpoints(point: Element) -> list[tuple[str, str]]:
     content = point.find(f"{_NCX_NS}content")
     if label is not None and label.text and content is not None:
         entries.append((label.text, content.get("src", "")))
-    entries.extend(_navpoints(child) for child in point.findall(f"{_NCX_NS}navPoint"))
+    for child in point.findall(f"{_NCX_NS}navPoint"):
+        entries.extend(_navpoints(child))
     return entries
 
 
