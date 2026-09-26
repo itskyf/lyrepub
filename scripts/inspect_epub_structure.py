@@ -82,10 +82,19 @@ def _read_ncx_toc(items: list[EpubItem]) -> tuple[str, list[tuple[str, str]]]:
     return ncx_items[0].get_name(), entries
 
 
+def _attrs_text(attrs: dict[str, str]) -> str:
+    """Render metadata attributes in canonical key order; fast_ebook builds
+    the dict from a Rust HashMap, whose iteration order is per-process
+    random and would make the report non-reproducible."""
+    if not attrs:
+        return ""
+    return " {" + ", ".join(f"{key!r}: {attrs[key]!r}" for key in sorted(attrs)) + "}"
+
+
 def _metadata_lines(book: epub.EpubBook) -> list[str]:
     lines = ["-- metadata (DC) --"]
     lines.extend(
-        f"{field}: {value}{f' {attrs}' if attrs else ''}"
+        f"{field}: {value}{_attrs_text(attrs)}"
         for field in _DC_FIELDS
         for value, attrs in book.get_metadata("DC", field)
     )
