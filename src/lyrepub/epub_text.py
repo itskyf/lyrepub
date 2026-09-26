@@ -150,6 +150,8 @@ def parse_blocks(
             if owners:
                 flush()
             owners.append((element, path, lang))
+        if element.tag == f"{{{_XHTML_NS}}}br":
+            parts.append(" ")
         if element.text:
             parts.append(element.text)
         for index, child in enumerate(element):

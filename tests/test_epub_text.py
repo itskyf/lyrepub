@@ -107,6 +107,17 @@ def test_parse_blocks_inline_entities_and_skips() -> None:
     assert all(b.spine_index == 3 and b.href == "Text/ch1.xhtml" for b in blocks)
 
 
+def test_line_break_separates_readable_text() -> None:
+    xhtml = (
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Test</title>'
+        "</head><body><p>A<br/>B</p></body></html>"
+    )
+
+    assert [b.text for b in parse_blocks(xhtml, 0, "test.xhtml", linear=True)] == [
+        "A B"
+    ]
+
+
 def test_nested_text_and_source_semantics() -> None:
     xhtml = (
         '<html xmlns="http://www.w3.org/1999/xhtml" '
