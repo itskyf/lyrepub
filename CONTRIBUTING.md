@@ -155,13 +155,10 @@ Research data, expected outputs, methodological criteria, or evaluation threshol
 
 ## Development Tooling
 
-See [`README.md`](README.md) for environment setup and local usage.
+See [`README.md`](README.md) for environment setup and local check/fix commands.
 
-Run repository checks with:
+Before finalizing a Pull Request, check the branch diff against the default branch:
 
 ```shell
-hk check --all
-hk run pre-commit
+hk check --pr
 ```
-
-Use `hk fix --all` when applying supported automatic fixes.

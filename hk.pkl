@@ -42,6 +42,7 @@ steps {
   ["fix-smart-quotes"] = Builtins.fix_smart_quotes
   ["forbid-submodules"] = Builtins.forbid_submodules
   ["lychee"] = (Builtins.lychee) {
+    // Avoid lychee warnings for mise.lock.
     exclude = List("mise.lock")
   }
   ["mixed-line-ending"] = Builtins.mixed_line_ending

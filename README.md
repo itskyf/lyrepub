@@ -65,7 +65,8 @@ Development CLI tools are managed with [mise](https://mise.jdx.dev/) and reposit
 
 ```shell
 mise install
-hk check --all
+hk check
+hk fix
 hk run pre-commit
 ```
 
