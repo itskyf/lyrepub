@@ -62,6 +62,7 @@ class Block:
     spine_index: int
     href: str
     block_index: int
+    linear: bool
     element_path: tuple[int, ...]
     run_index: int
     element_id: str | None
@@ -71,7 +72,9 @@ class Block:
     role: str | None
 
 
-def parse_blocks(xhtml: str, spine_index: int, href: str) -> list[Block]:
+def parse_blocks(
+    xhtml: str | bytes, spine_index: int, href: str, *, linear: bool
+) -> list[Block]:
     """Parse one XHTML spine document into source-located readable blocks.
 
     Raises ValueError for malformed XML or missing XHTML document structure.
@@ -113,6 +116,7 @@ def parse_blocks(xhtml: str, spine_index: int, href: str) -> list[Block]:
                 spine_index=spine_index,
                 href=href,
                 block_index=len(blocks),
+                linear=linear,
                 element_path=path,
                 run_index=run_index,
                 element_id=element.get("id"),
@@ -166,12 +170,13 @@ def parse_blocks(xhtml: str, spine_index: int, href: str) -> list[Block]:
 def extract_blocks(epub_path: Path) -> list[Block]:
     """Read all XHTML spine documents in EPUB reading order.
 
-    Documents are strict UTF-8 and never Unicode-normalized. Missing spine
-    references and non-XHTML spine items raise ValueError.
+    XML encoding follows its declaration or BOM; text is never
+    Unicode-normalized. Missing spine references and non-XHTML spine items
+    raise ValueError.
     """
     book = epub.read_epub(epub_path, options={"ignore_ncx": True, "ignore_nav": True})
     blocks: list[Block] = []
-    for spine_index, (idref, _linear) in enumerate(book.get_spine()):
+    for spine_index, (idref, linear) in enumerate(book.get_spine()):
         item = book.get_item_with_id(idref)
         if item is None:
             msg = f"spine idref {idref!r} not in manifest of {epub_path}"
@@ -184,6 +189,6 @@ def extract_blocks(epub_path: Path) -> list[Block]:
             msg = f"spine idref {idref!r} has empty or missing content in {epub_path}"
             raise ValueError(msg)
         blocks.extend(
-            parse_blocks(content.decode("utf-8"), spine_index, item.get_name())
+            parse_blocks(content, spine_index, item.get_name(), linear=linear)
         )
     return blocks

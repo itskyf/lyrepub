@@ -32,6 +32,7 @@ def _container_xml() -> bytes:
 def _content_opf(
     spine_ids: tuple[str, ...] = ("ch0", "ch2", "ch1"),
     media_types: dict[str, str] | None = None,
+    non_linear_id: str | None = None,
 ) -> bytes:
     package = ET.Element(
         "package",
@@ -60,12 +61,15 @@ def _content_opf(
         )
     spine = ET.SubElement(package, "spine")
     for idref in spine_ids:
-        ET.SubElement(spine, "itemref", {"idref": idref})
+        attrs = {"idref": idref}
+        if idref == non_linear_id:
+            attrs["linear"] = "no"
+        ET.SubElement(spine, "itemref", attrs)
     return ET.tostring(package, encoding="utf-8", xml_declaration=True)
 
 
 def _write_minimal_epub(
-    path: Path, documents: dict[str, str], opf: bytes | None = None
+    path: Path, documents: dict[str, str | bytes], opf: bytes | None = None
 ) -> None:
     with zipfile.ZipFile(path, "w") as archive:
         archive.writestr(
@@ -91,7 +95,7 @@ def test_parse_blocks_inline_entities_and_skips() -> None:
         "</section></body></html>"
     )
 
-    blocks = parse_blocks(xhtml, spine_index=3, href="Text/ch1.xhtml")
+    blocks = parse_blocks(xhtml, spine_index=3, href="Text/ch1.xhtml", linear=True)
 
     assert [b.text for b in blocks] == [
         "Chương một & những điều",
@@ -115,7 +119,7 @@ def test_nested_text_and_source_semantics() -> None:
         "</body></html>"
     )
 
-    blocks = parse_blocks(xhtml, 2, "Text/test.xhtml")
+    blocks = parse_blocks(xhtml, 2, "Text/test.xhtml", linear=True)
 
     assert [block.text for block in blocks] == [
         "Lời đầu",
@@ -164,7 +168,7 @@ def test_extract_blocks_preserves_spine_order(tmp_path: Path) -> None:
         ),
     }
     epub_path = tmp_path / "minimal.epub"
-    _write_minimal_epub(epub_path, documents)
+    _write_minimal_epub(epub_path, documents, _content_opf(non_linear_id="ch2"))
 
     blocks = extract_blocks(epub_path)
 
@@ -173,7 +177,22 @@ def test_extract_blocks_preserves_spine_order(tmp_path: Path) -> None:
         (2, "ch1.xhtml", "Ba"),
     ]
     assert [b.block_index for b in blocks] == [0, 0]
+    assert [b.linear for b in blocks] == [False, True]
     assert [b.element_path for b in blocks] == [(1, 0), (1, 0)]
+
+
+def test_extract_blocks_accepts_utf16_xhtml(tmp_path: Path) -> None:
+    xhtml = (
+        '<?xml version="1.0" encoding="UTF-16"?>'
+        '<html xmlns="http://www.w3.org/1999/xhtml"><head><title>Test</title>'
+        "</head><body><p>Tiếng Việt</p></body></html>"
+    ).encode("utf-16")
+    epub_path = tmp_path / "utf16.epub"
+    _write_minimal_epub(epub_path, {"ch0.xhtml": xhtml}, _content_opf(("ch0",)))
+
+    blocks = extract_blocks(epub_path)
+
+    assert [(block.text, block.linear) for block in blocks] == [("Tiếng Việt", True)]
 
 
 @pytest.mark.parametrize(
@@ -186,7 +205,7 @@ def test_extract_blocks_preserves_spine_order(tmp_path: Path) -> None:
 )
 def test_invalid_xhtml_fails(xhtml: str) -> None:
     with pytest.raises(ValueError, match="invalid XHTML"):
-        parse_blocks(xhtml, 0, "bad.xhtml")
+        parse_blocks(xhtml, 0, "bad.xhtml", linear=True)
 
 
 def test_invalid_spine_reference_fails(tmp_path: Path) -> None:
