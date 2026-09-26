@@ -27,6 +27,7 @@ logger = logging.getLogger("audiobook")
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ISBN = "9786326186253"
+_EXPECTED_TRACKS = frozenset(range(1, 8))
 _STEM = re.compile(r"dem-hoi-(\d+)$")
 _SPINE_LABELS = {
     0: "cover",
@@ -56,7 +57,7 @@ TRACK_SECTION_CORRESPONDENCE: dict[int, tuple[int, ...]] = {
 
 
 def _probe_files(silver: Path) -> dict[int, Path]:
-    """Map track numbers to their ffprobe JSON files."""
+    """Map track numbers to their ffprobe JSON files, requiring tracks 1-7."""
     files: dict[int, Path] = {}
     for path in sorted(silver.glob("dem-hoi-*.ffprobe.json")):
         match = _STEM.fullmatch(path.name.removesuffix(".ffprobe.json"))
@@ -64,8 +65,11 @@ def _probe_files(silver: Path) -> dict[int, Path]:
             msg = f"unrecognized probe file name: {path.name}"
             raise ValueError(msg)
         files[int(match.group(1))] = path
-    if not files:
-        msg = "no data/silver/dem-hoi-*.ffprobe.json; run scripts/inspect_audiobook.sh"
+    if set(files) != _EXPECTED_TRACKS:
+        msg = (
+            f"expected probe files for tracks {sorted(_EXPECTED_TRACKS)}, "
+            f"found {sorted(files)}; rerun scripts/inspect_audiobook.sh"
+        )
         raise ValueError(msg)
     return files
 
