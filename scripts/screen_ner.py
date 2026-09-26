@@ -22,10 +22,10 @@
 Screens the single NER candidate NlpHUST/ner-vietnamese-electra-base
 through the Transformers token-classification pipeline (built-in
 aggregation only) on the frozen entity-rich cases, then corpus-wide to
-attach named-entity counts and lingua-py language evidence to every
-source block. Candidate-finding aid for Issue #11, not a NER comparison
-or benchmark. uv builds an isolated environment from the inline
-metadata, so no project dependency is touched:
+attach candidate named-entity counts and lingua-py language evidence to
+every source block. Candidate-finding aid for Issue #11, not a NER
+comparison or benchmark. uv builds an isolated environment from the
+inline metadata, so no project dependency is touched:
 
     PYTHONPATH=src pixi run --environment dev uv run --script scripts/screen_ner.py
 
@@ -42,21 +42,17 @@ from collections import Counter
 from pathlib import Path
 
 import torch
-from huggingface_hub import HfApi
 from lingua import LanguageDetector, LanguageDetectorBuilder
 from transformers import pipeline
 
 from lyrepub.epub_text import extract_blocks
 from lyrepub.inspection import ENTITY_RICH_CASES, resolve_case
+from lyrepub.ner import NER_MODEL, NER_REVISION
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 ISBNS = ("9786045633946", "9786326186253")
-NER_MODEL = "NlpHUST/ner-vietnamese-electra-base"
 ENTITY_GROUPS = ("PER", "LOC", "ORG", "MISC")
 VIETNAMESE = "vi"
-# Blocks longer than this exceed the NER model context and are truncated
-# by the pipeline; used only to report where that can occur.
-NER_INPUT_CHARS = 2000
 
 logger = logging.getLogger("screen")
 
@@ -81,7 +77,7 @@ def log_header() -> None:
     for package in packages:
         logger.info("%s==%s", package, importlib.metadata.version(package))
     logger.info("cuda available: %s", torch.cuda.is_available())
-    logger.info("%s revision %s", NER_MODEL, HfApi().model_info(NER_MODEL).sha)
+    logger.info("%s revision %s (enforced)", NER_MODEL, NER_REVISION)
 
 
 def adequacy(ner: pipeline, blocks: dict[str, list]) -> None:
@@ -131,14 +127,19 @@ def corpus_pass(ner: pipeline, detector: LanguageDetector) -> None:
     for isbn in ISBNS:
         blocks = extract_blocks(_epub_path(isbn))
         texts = [block.text for block in blocks]
-        long_blocks = sum(1 for text in texts if len(text) > NER_INPUT_CHARS)
+        # Context limits are token-based: report blocks the pipeline will
+        # actually chunk, from tokenizer lengths against the model limit.
+        token_counts = [len(ids) for ids in ner.tokenizer(texts)["input_ids"]]
+        over_context = sum(
+            1 for count in token_counts if count > ner.tokenizer.model_max_length
+        )
         logger.info(
-            "%s: %d blocks, %d longer than %d chars (NER input chunked by the "
-            "pipeline with stride at the model context limit)",
+            "%s: %d blocks, %d over the %d-token model context "
+            "(chunked by the pipeline with stride)",
             isbn,
             len(texts),
-            long_blocks,
-            NER_INPUT_CHARS,
+            over_context,
+            ner.tokenizer.model_max_length,
         )
         entity_counts: list[Counter[str]] = []
         for entities in ner(texts, batch_size=64, stride=64):
@@ -175,7 +176,7 @@ def corpus_pass(ner: pipeline, detector: LanguageDetector) -> None:
         writer.writerows(rows)
 
     for isbn in ISBNS:
-        logger.info("%s entities by label: %s", isbn, dict(totals[isbn]))
+        logger.info("%s candidate detections by label: %s", isbn, dict(totals[isbn]))
         logger.info("%s languages: %s", isbn, dict(languages[isbn].most_common()))
         for row in rows:
             if row["isbn"] == isbn and row["lid_label"] != VIETNAMESE:
@@ -203,6 +204,7 @@ def main() -> None:
     ner = pipeline(
         "token-classification",
         model=NER_MODEL,
+        revision=NER_REVISION,
         aggregation_strategy="simple",
         device=device,
     )

@@ -110,9 +110,11 @@ def _block_row(isbn: str, block: Block) -> dict[str, object]:
     return row
 
 
-def _percentile(values: list[int], pct: float) -> int:
-    ordered = sorted(values)
-    return ordered[min(int(len(ordered) * pct), len(ordered) - 1)]
+def _percentile(values: list[int], pct: int) -> float:
+    """pct-th percentile by linear interpolation between order
+    statistics (statistics.quantiles 'inclusive', the numpy-compatible
+    convention)."""
+    return statistics.quantiles(values, n=100, method="inclusive")[pct - 1]
 
 
 def _examples(
@@ -152,8 +154,8 @@ def summarize(
     stats = (
         f"blocks={len(rows)} char_len min={min(lengths)} "
         f"median={statistics.median(lengths):.0f} "
-        f"p90={_percentile(lengths, 0.90)} p99={_percentile(lengths, 0.99)} "
-        f"max={max(lengths)}"
+        f"p90={_percentile(lengths, 90):.0f} "
+        f"p99={_percentile(lengths, 99):.0f} max={max(lengths)}"
     )
     lines.append(stats)
     total_chars = max(sum(lengths), 1)
@@ -209,8 +211,8 @@ def sentence_stats(blocks: list[Block], rows: list[dict[str, object]]) -> list[s
     return [
         (
             f"sentence_len: count={len(lengths)} min={min(lengths)} "
-            f"median={median:.0f} p90={_percentile(lengths, 0.90)} "
-            f"p99={_percentile(lengths, 0.99)} max={max(lengths)}"
+            f"median={median:.0f} p90={_percentile(lengths, 90):.0f} "
+            f"p99={_percentile(lengths, 99):.0f} max={max(lengths)}"
         )
     ]
 
