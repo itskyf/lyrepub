@@ -201,10 +201,9 @@ Observed at the coarsest useful level:
   the section text — a normal reading of the heading, not inserted
   content.
 - Omissions/repetitions: no section-level mismatch identified; differences
-  within sections were not assessed. The coarse characters-per-second
-  check is consistent (10.8–11.7, median 11.3 chars/s per track,
-  `audiobook_report.txt`) — descriptive only, not evidence of
-  correspondence.
+  within sections were not assessed. Characters per second per confirmed
+  track: range 10.8–11.7, median 11.3 (`audiobook_report.txt`) —
+  descriptive only, not evidence of correspondence.
 - Limits: no sentence alignment, no ASR; finer insert/omit/repeat
   detection inside sections is deferred to the synchronization work (#12).
 
