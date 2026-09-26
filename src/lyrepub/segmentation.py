@@ -9,6 +9,7 @@ unpinned piece.
 """
 
 from functools import lru_cache
+from typing import cast
 
 from wtpsplit import SaT
 
@@ -26,4 +27,5 @@ def segment_sentences(text: str) -> list[str]:
 
     Stripped and non-empty because SaT outputs carry trailing whitespace.
     """
-    return [sentence.strip() for sentence in _sat().split(text) if sentence.strip()]
+    sentences = cast("list[str]", _sat().split(text))
+    return [sentence.strip() for sentence in sentences if sentence.strip()]

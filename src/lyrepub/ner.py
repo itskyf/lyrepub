@@ -11,9 +11,10 @@ land in MISC), and no explicit model-card license.
 
 from dataclasses import dataclass
 from functools import lru_cache
+from typing import cast
 
 import torch
-from transformers import pipeline
+from transformers import TokenClassificationPipeline, pipeline
 
 NER_MODEL = "NlpHUST/ner-vietnamese-electra-base"
 NER_REVISION = "0292941f879af923edf4acf5b082b41f7492b352"
@@ -36,7 +37,7 @@ class Entity:
 
 
 @lru_cache(maxsize=1)
-def _ner() -> pipeline:
+def _ner() -> TokenClassificationPipeline:
     device = 0 if torch.cuda.is_available() else -1
     ner = pipeline(
         "token-classification",
@@ -45,7 +46,11 @@ def _ner() -> pipeline:
         aggregation_strategy="simple",
         device=device,
     )
-    ner.tokenizer.model_max_length = ner.model.config.max_position_embeddings
+    tokenizer = ner.tokenizer
+    if tokenizer is None:
+        msg = "token-classification pipeline has no tokenizer"
+        raise RuntimeError(msg)
+    tokenizer.model_max_length = ner.model.config.max_position_embeddings
     return ner
 
 
@@ -56,6 +61,11 @@ def recognize_entities(text: str) -> list[Entity]:
     input.
     """
     return [
-        Entity(entity["word"], entity["entity_group"], entity["start"], entity["end"])
+        Entity(
+            entity["word"],
+            entity["entity_group"],
+            cast("int", entity["start"]),
+            cast("int", entity["end"]),
+        )
         for entity in _ner()(text, stride=64)
     ]
