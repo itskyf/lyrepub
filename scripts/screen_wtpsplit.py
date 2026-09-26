@@ -11,29 +11,33 @@
 # [tool.uv.sources]
 # torch = { index = "pytorch-cpu" }
 # ///
-"""Screen SaT/wtpsplit sentence segmentation on the frozen inspection cases.
+"""Screen a SaT/wtpsplit checkpoint on the frozen inspection cases.
 
 Documented default inference, no tuning; part of the symmetric
-segmentation screen for Issue #11. uv builds an isolated environment
-from the inline metadata, so no project dependency is touched:
+segmentation screen for Issue #11. The checkpoint revision is fetched
+and enforced at load time. uv builds an isolated environment from the
+inline metadata, so no project dependency is touched:
 
     PYTHONPATH=src:scripts pixi run --environment dev uv run --script \\
-        scripts/screen_wtpsplit.py
+        scripts/screen_wtpsplit.py sat-3l
 
-Writes data/silver/segmentation_report_wtpsplit.txt.
+Writes data/silver/segmentation_report_wtpsplit-<checkpoint>.txt.
 """
+
+import sys
 
 from _screen_common import run_cases
 from huggingface_hub import HfApi
 from wtpsplit import SaT
 
-SAT_NAME = "sat-3l"
-SAT_REPO = "segment-any-text/sat-3l"
+name = sys.argv[1]
+repo = f"segment-any-text/{name}"
+revision = HfApi().model_info(repo).sha
 
-sat = SaT(SAT_NAME)
+sat = SaT(name, from_pretrained_kwargs={"revision": revision})
 run_cases(
-    "wtpsplit",
+    f"wtpsplit-{name}",
     lambda text: list(sat.split(text)),
     ("fast-ebook", "huggingface_hub", "torch", "wtpsplit"),
-    notes=(f"{SAT_REPO} revision {HfApi().model_info(SAT_REPO).sha}",),
+    notes=(f"{repo} revision {revision} (enforced)",),
 )
