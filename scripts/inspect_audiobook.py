@@ -121,7 +121,7 @@ def _report_lines(
     lines.append("")
     lines.append("-- per-spine-item extracted characters --")
     lines.extend(
-        f"s{index} ({_SPINE_LABELS.get(index, '?')}): chars={spine_chars.get(index, 0)}"
+        f"s{index} ({_SPINE_LABELS[index]}): chars={spine_chars[index]}"
         for index in sorted(spine_chars)
     )
     lines.extend(_correspondence_lines(tracks, spine_chars))
@@ -147,11 +147,11 @@ def _correspondence_lines(
         if row is None:
             msg = f"correspondence references unknown track {track}"
             raise ValueError(msg)
-        chars = sum(spine_chars.get(index, 0) for index in sections)
+        chars = sum(spine_chars[index] for index in sections)
         duration = float(row["duration_s"])
         rate = chars / duration
         rates.append(rate)
-        labels = ", ".join(f"s{i} ({_SPINE_LABELS.get(i, '?')})" for i in sections)
+        labels = ", ".join(f"s{i} ({_SPINE_LABELS[i]})" for i in sections)
         lines.append(
             f"track {track}: {labels} chars={chars} duration_s={duration:.1f} "
             f"chars_per_s={rate:.1f}"

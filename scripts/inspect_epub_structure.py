@@ -20,8 +20,9 @@ from __future__ import annotations
 import importlib.metadata
 import logging
 from collections import Counter
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from typing import TYPE_CHECKING
+from urllib.parse import unquote
 
 from defusedxml.ElementTree import fromstring
 from fast_ebook import EpubItem, epub
@@ -61,8 +62,8 @@ def _navpoints(point: Element) -> list[tuple[str, str]]:
     return entries
 
 
-def _read_ncx_toc(items: list[EpubItem]) -> list[tuple[str, str]]:
-    """Parse the NCX manifest item's navMap into flat (title, href) pairs."""
+def _read_ncx_toc(items: list[EpubItem]) -> tuple[str, list[tuple[str, str]]]:
+    """Return the NCX item's container path and its flat (title, href) pairs."""
     ncx_items = [item for item in items if item.get_media_type() == _NCX]
     if len(ncx_items) != 1:
         msg = f"expected exactly one NCX item, found {len(ncx_items)}"
@@ -78,7 +79,7 @@ def _read_ncx_toc(items: list[EpubItem]) -> list[tuple[str, str]]:
     if not entries:
         msg = "NCX navMap has no navPoints"
         raise ValueError(msg)
-    return entries
+    return ncx_items[0].get_name(), entries
 
 
 def _metadata_lines(book: epub.EpubBook) -> list[str]:
@@ -130,22 +131,38 @@ def _spine_lines(
     return lines
 
 
-def _href_matches(toc_href: str, item_name: str) -> bool:
-    """Compare a ToC href and manifest item name, tolerating path prefixes."""
-    return (
-        toc_href == item_name
-        or toc_href.endswith(f"/{item_name}")
-        or item_name.endswith(f"/{toc_href}")
-    )
+def _container_path(ncx_name: str, src: str) -> str:
+    """Resolve an NCX content@src URI reference to a container-relative path.
+
+    The reference is relative to the NCX item's location in the container;
+    the fragment is dropped (document-level matching), percent escapes are
+    decoded, and "." / ".." segments are normalized.
+    """
+    parts: list[str] = []
+    for part in (
+        *PurePosixPath(ncx_name).parent.parts,
+        *PurePosixPath(unquote(src.partition("#")[0])).parts,
+    ):
+        if part in ("", "."):
+            continue
+        if part == "..":
+            if not parts:
+                msg = f"toc src {src!r} escapes the EPUB container root"
+                raise ValueError(msg)
+            parts.pop()
+        else:
+            parts.append(part)
+    return "/".join(parts)
 
 
-def _join_lines(toc: list[tuple[str, str]], spine_names: dict[int, str]) -> list[str]:
+def _join_lines(
+    toc: list[tuple[str, str]], ncx_name: str, spine_names: dict[int, str]
+) -> list[str]:
     matched: dict[int, str] = {}
     unmatched: list[str] = []
     for title, href in toc:
-        index = next(
-            (i for i, name in spine_names.items() if _href_matches(href, name)), None
-        )
+        target = _container_path(ncx_name, href)
+        index = next((i for i, name in spine_names.items() if name == target), None)
         if index is None:
             unmatched.append(f'toc entry not in spine: "{title}" -> {href}')
         else:
@@ -181,7 +198,7 @@ def inspect(isbn: str, epub_path: Path) -> list[str]:
     items = book.get_items()
     spine = book.get_spine()
     spine_names = _spine_names(book, epub_path)
-    toc = _read_ncx_toc(items)
+    ncx_name, toc = _read_ncx_toc(items)
     return [
         f"== {isbn}: {epub_path.name} ==",
         f"fast-ebook=={importlib.metadata.version('fast-ebook')}",
@@ -190,7 +207,7 @@ def inspect(isbn: str, epub_path: Path) -> list[str]:
         *_spine_lines(spine, spine_names),
         "-- toc --",
         *(f'"{title}" -> {href}' for title, href in toc),
-        *_join_lines(toc, spine_names),
+        *_join_lines(toc, ncx_name, spine_names),
         *_block_lines(epub_path, spine_names),
     ]
 
