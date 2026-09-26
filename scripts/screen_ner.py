@@ -43,7 +43,7 @@ from pathlib import Path
 
 import torch
 from lingua import LanguageDetector, LanguageDetectorBuilder
-from transformers import pipeline
+from transformers import TokenClassificationPipeline, pipeline
 
 from lyrepub.epub_text import extract_blocks
 from lyrepub.inspection import ENTITY_RICH_CASES, resolve_case
@@ -80,9 +80,17 @@ def log_header() -> None:
     logger.info("%s revision %s (enforced)", NER_MODEL, NER_REVISION)
 
 
-def adequacy(ner: pipeline, blocks: dict[str, list]) -> None:
+def adequacy(ner: TokenClassificationPipeline, blocks: dict[str, list]) -> None:
     """Judge the candidate on the frozen entity-rich cases."""
-    logger.info("id2label: %s", list(ner.model.config.id2label.values()))
+    model = ner.model
+    if model is None:
+        msg = "token-classification pipeline has no model"
+        raise RuntimeError(msg)
+    id2label = model.config.id2label
+    if id2label is None:
+        msg = "token-classification model has no id2label mapping"
+        raise RuntimeError(msg)
+    logger.info("id2label: %s", list(id2label.values()))
     for ordinal, case in enumerate(ENTITY_RICH_CASES, start=1):
         block = resolve_case(case, blocks[case.isbn])
         logger.info(
@@ -112,7 +120,7 @@ def adequacy(ner: pipeline, blocks: dict[str, list]) -> None:
             )
 
 
-def corpus_pass(ner: pipeline, detector: LanguageDetector) -> None:
+def corpus_pass(ner: TokenClassificationPipeline, detector: LanguageDetector) -> None:
     """Attach entity counts and language evidence to every source block."""
     blocks_csv = REPO_ROOT / "data/silver/blocks.csv"
     with blocks_csv.open(encoding="utf-8", newline="") as handle:
@@ -122,6 +130,11 @@ def corpus_pass(ner: pipeline, detector: LanguageDetector) -> None:
         for row in rows
     }
 
+    tokenizer = ner.tokenizer
+    if tokenizer is None:
+        msg = "token-classification pipeline has no tokenizer"
+        raise RuntimeError(msg)
+
     totals: dict[str, Counter[str]] = {}
     languages: dict[str, Counter[str]] = {}
     for isbn in ISBNS:
@@ -129,9 +142,9 @@ def corpus_pass(ner: pipeline, detector: LanguageDetector) -> None:
         texts = [block.text for block in blocks]
         # Context limits are token-based: report blocks the pipeline will
         # actually chunk, from tokenizer lengths against the model limit.
-        token_counts = [len(ids) for ids in ner.tokenizer(texts)["input_ids"]]
+        token_counts = [len(ids) for ids in tokenizer(texts)["input_ids"]]
         over_context = sum(
-            1 for count in token_counts if count > ner.tokenizer.model_max_length
+            1 for count in token_counts if count > tokenizer.model_max_length
         )
         logger.info(
             "%s: %d blocks, %d over the %d-token model context "
@@ -139,7 +152,7 @@ def corpus_pass(ner: pipeline, detector: LanguageDetector) -> None:
             isbn,
             len(texts),
             over_context,
-            ner.tokenizer.model_max_length,
+            tokenizer.model_max_length,
         )
         entity_counts: list[Counter[str]] = []
         for entities in ner(texts, batch_size=64, stride=64):
@@ -211,7 +224,11 @@ def main() -> None:
     # The checkpoint ships no tokenizer model_max_length (unset sentinel),
     # so the pipeline would never truncate; use the model's own positional
     # limit for stride chunking of long blocks.
-    ner.tokenizer.model_max_length = ner.model.config.max_position_embeddings
+    tokenizer = ner.tokenizer
+    if tokenizer is None:
+        msg = "token-classification pipeline has no tokenizer"
+        raise RuntimeError(msg)
+    tokenizer.model_max_length = ner.model.config.max_position_embeddings
     blocks = {isbn: extract_blocks(_epub_path(isbn)) for isbn in ISBNS}
     adequacy(ner, blocks)
     detector = LanguageDetectorBuilder.from_all_languages().build()
