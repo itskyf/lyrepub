@@ -1,4 +1,4 @@
-# Source characterization (Issue #11)
+# Source characterization
 
 Characterization of the two selected EPUB sources and the Đêm hội Long Trì
 audiobook, covering only properties that can materially affect the evaluated
@@ -26,7 +26,6 @@ the repository root; bronze sources fetched via
 | `epub_structure.txt` | `pixi run --environment dev python scripts/inspect_epub_structure.py` |
 | `blocks.csv`, `scan_summary.txt` | `pixi run --environment dev python scripts/scan_sources.py` |
 | `blocks_enriched.csv`, `ner_report.txt` | `PYTHONPATH=src pixi run --environment dev uv run --script scripts/screen_ner.py` |
-| `segmentation_report_*.txt` | `PYTHONPATH=src pixi run --environment dev uv run --script scripts/screen_wtpsplit.py …` (selected: sat-3l-sm) |
 | `language_mixing_report.txt` | `PYTHONPATH=src pixi run --environment dev uv run --script scripts/screen_language_mixing.py` |
 | `*.ffprobe.json`, `audiobook_tracks.csv`, `audiobook_report.txt` | `./scripts/inspect_audiobook.sh` then `pixi run --environment dev python scripts/inspect_audiobook.py` |
 
@@ -80,7 +79,7 @@ Book 1: 3,033 blocks, char length median 145, p90 589, p99 1512, max 3427.
 Book 2: 1,535 blocks, median 67, p90 282, p99 732, max 1741 — shorter,
 dialogue-shaped blocks. Dialogue-marker blocks
 (starting "- ") are 1,137 (37%) in book 1 and 787 (51%) in book 2. Sentence
-lengths (SaT, selected segmentation): median 64/max 452 (book 1) and
+lengths (SaT segmentation): median 64/max 452 (book 1) and
 median 42/max 500 (book 2). No control, private-use, replacement, or
 non-Latin-unexpected characters were found in either book (Unicode/source
 quality inventory, `scan_summary.txt`).
@@ -96,8 +95,8 @@ number-sparse: 28 digit runs, 6 year-like, 0 date-like (e.g.
 
 ### Named entities
 
-Automated annotation (NlpHUST/ner-vietnamese-electra-base, PR #22;
-candidate evidence, not reference labels): book 1 — 4,613 PER, 1,928 LOC,
+Automated annotation (NlpHUST/ner-vietnamese-electra-base; candidate
+evidence, not reference labels): book 1 — 4,613 PER, 1,928 LOC,
 44 ORG, 637 MISC; book 2 — 1,314 PER, 121 LOC, 6 ORG, 55 MISC
 (`ner_report.txt`). The ORG channel is sparse in both books (recorded
 limitation of the checkpoint). Inspected examples from the frozen
@@ -110,18 +109,17 @@ entity-rich cases include
 Book 1 upper tail: 11 blocks exceed 2,000 chars; the longest block is
 `9786045633946 s5 Text/6.html #9 — "Phủ Chiêu Quốc không phải là phủ lớn nhất…"`,
 3,427 chars. Book 2's longest block is 1,741 chars
-(`s5 Text/section_5.html #132`). Long blocks concentrate colons and quoted
-speech (book 1: 1,120 colons in 1,035 blocks).
+(`s5 Text/section_5.html #132`).
 
 ### Code-switched and mixed-language text
 
 Manual judgement from the mixed-language screen
 (`language_mixing_report.txt`; lingua 2.2.0 `detect_multiple_languages_of`
-over all 4,568 blocks, 270 flagged). The detector's experimental span mode
+over all 4,568 blocks, 263 flagged). The detector's experimental span mode
 is dominated by noise on this corpus: tiny non-Vietnamese spans on ordinary
 Vietnamese text (e.g. "An Nam" repeatedly labeled Zulu; short play dialogue
 labeled Tagalog/Sotho/Ganda in book 2), so its output is used only to
-surface candidates, and every non-Vietnamese span of four or more words was
+surface candidates; every non-Vietnamese span in the flagged blocks was
 read. Confirmed observations:
 
 - Book 1 contains a small set of genuine foreign-language content, all of
@@ -162,15 +160,15 @@ structures:
 ## Audiobook characterization (Đêm hội Long Trì)
 
 Observed (`audiobook_tracks.csv`, `audiobook_report.txt`): 7 MP3 tracks
-(`dem-hoi-1.mp3`…`dem-hoi-7.mp3`), MP3 44.1 kHz stereo 96 kb/s CBR, total
+(`dem-hoi-1.mp3`…`dem-hoi-7.mp3`), MP3, 44.1 kHz, stereo, 96 kb/s, total
 16,446.6 s (≈ 4 h 34 m). Tags are near-absent (genre=Blues on all tracks,
 encoded_by=Lavf52.13.0 on tracks 2–7, no title/author/track tags), so
 track identity rests on content, not metadata.
 
 Track-to-section correspondence is a manual judgement, established by
 listening to each bronze track and matching the heard opening and ending
-against EPUB blocks (listener: the repository owner; transcripts recorded
-in Issue #11 during this characterization):
+against EPUB blocks (listener: the repository owner; the heard openings
+and endings are recorded in the table below):
 
 | Track | Heard opening | Matched EPUB opening | Heard ending | Matched EPUB ending |
 | --- | --- | --- | --- | --- |
@@ -197,10 +195,11 @@ Observed at the coarsest useful level:
   in words ("Hai"…"Bảy" for the EPUB's numeral headings II–VII) before
   the section text — a normal reading of the heading, not inserted
   content.
-- Omissions/repetitions: none observed at this level; the coarse
-  characters-per-second check is consistent (10.8–11.7, median 11.3
-  chars/s per track, `audiobook_report.txt`) — descriptive only, not
-  evidence of correspondence.
+- Omissions/repetitions: no section-level mismatch identified; differences
+  within sections were not assessed. The coarse characters-per-second
+  check is consistent (10.8–11.7, median 11.3 chars/s per track,
+  `audiobook_report.txt`) — descriptive only, not evidence of
+  correspondence.
 - Limits: no sentence alignment, no ASR; finer insert/omit/repeat
   detection inside sections is deferred to the synchronization work (#12).
 
@@ -237,5 +236,5 @@ Challenge:
 
 For the alignment pathway, the audiobook observations add: track 1 spans
 three spine documents (any audio-paired benchmark item must respect the
-merged track and the inserted opening announcement), and each track opens
+merged track and the inserted opening announcement), and tracks 2–7 open
 by verbalizing the section heading.
