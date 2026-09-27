@@ -6,7 +6,7 @@
 
 ## Candidate landscape
 
-The first four form a **small feasibility shortlist**, not four required arms of the final experiment. “Local” means downloadable weights or an official local inference path, subject to the stated access and license; API availability alone is not a local checkpoint.
+The first four form a **small feasibility shortlist**, not four required arms of the final experiment. "Local" means downloadable weights or an official local inference path, subject to the stated access and license; API availability alone is not a local checkpoint.
 
 | Candidate and primary source | Vietnamese / other relevant language evidence | Availability, rights, and practical constraint | Pilot role |
 | --- | --- | --- | --- |
@@ -26,7 +26,7 @@ The first four form a **small feasibility shortlist**, not four required arms of
 
 ## Documented capability surface
 
-Every entry in this matrix is **D** unless marked **A**. “Segmented” or “turn-by-turn” is an inference workflow, not proof of native one-pass dialogue or unlimited context. A dash means no distinct capability established in the cited official material, not proof of impossibility. The linked card/runtime above is the source for each row.
+Every entry in this matrix is **D** unless marked **A**. "Segmented" or "turn-by-turn" is an inference workflow, not proof of native one-pass dialogue or unlimited context. A dash means no distinct capability established in the cited official material, not proof of impossibility. The linked card/runtime above is the source for each row.
 
 | Model | Voice, language, and conditioning | Style, control, and non-verbal output | Text/audio interface, long form, dialogue, runtime |
 | --- | --- | --- | --- |
