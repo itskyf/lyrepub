@@ -74,7 +74,9 @@ The text strata organize source characterization and do not imply a difficulty r
 
 ### 5.1 TTS
 
-A TTS candidate must:
+The TTS pathway uses a preselected existing system rather than a broad model comparison. The selection rationale and surveyed alternatives are recorded in the TTS candidate survey.
+
+The selected TTS configuration must:
 
 - provide usable Vietnamese synthesis;
 - be directly usable through an existing checkpoint, package, API, or equivalent interface;
@@ -82,9 +84,11 @@ A TTS candidate must:
 - be suitable for offline publication generation;
 - provide a practical, reproducible path from synthesized audio to timings suitable for publication synchronization.
 
-Audio-only synthesis without such a timing path is not sufficient for feasibility.
+Audio-only synthesis without such a timing path is not sufficient for the reported pathway.
 
-Candidates should use the same source material and common preprocessing where meaningful.
+Before the reported evaluation, check the selected system against the representative and challenge material derived from source characterization. Resolve observed failures only with the smallest justified processing and record interventions that materially affect output. If a failure would require a different TTS system, editing or omitting authored narratable text, or another methodological change, retain the failure for explicit review before proceeding.
+
+Voice selection may use focused pre-experiment listening when voice identity is not itself an evaluated research variable. Record the exact preset or conditioning used and the selection rationale.
 
 Evaluation considers properties relevant to audiobook production, including:
 
@@ -99,7 +103,11 @@ ASR-based CER or WER may be used diagnostically but is not treated as the sole m
 
 ### 5.2 Existing-audiobook alignment
 
-An alignment candidate must:
+Storyteller `stalign` is the selected alignment implementation family. Route selection is staged rather than treated as a broad ASR or alignment benchmark.
+
+Begin with the simplest directly usable documented route. If it produces usable timing output for protocol evaluation without a blocking material failure, freeze that route and do not continue route exploration. If a material failure occurs, retain the evidence and explicitly review the next documented route before proceeding. Do not implement an automatic fallback chain.
+
+The selected route must:
 
 - have a usable implementation and pretrained models where required;
 - require no training or fine-tuning;
@@ -140,25 +148,31 @@ The benchmark is derived from the selected books and contains:
 
 Do not add challenge categories without evidence from the selected books or observed system behavior.
 
-Before the final comparison, freeze:
+Before each reported pathway evaluation, freeze:
 
-- evaluated candidates;
+- the selected system and route;
+- synchronization granularity;
 - benchmark items;
 - evaluation measures;
-- inference settings that materially affect results.
+- inference settings that materially affect results;
+- preprocessing and any candidate-specific processing or routing;
+- human-assistance conditions;
+- the manually verified subset and procedure used for timing-error evaluation where applicable.
+
+A limited feasibility check may precede this freeze only to establish that the selected configuration can be evaluated on the source-derived material. It is not a separate candidate-comparison experiment.
 
 For each evaluated configuration:
 
-1. use the same corresponding source material where comparison is meaningful;
+1. use the corresponding source material defined by the benchmark;
 2. apply the recorded preprocessing;
 3. run the recorded tool or model version with the reported settings;
 4. retain the outputs needed for evaluation;
 5. apply the common analysis procedure;
 6. record failures and manual interventions without silently correcting them.
 
-Candidate-specific processing is permitted when required by the documented system interface, but must be reported.
+Configuration-specific processing is permitted when required by the documented system interface or justified by an observed failure, but must be reported.
 
-Do not reduce the comparison to an arbitrary weighted overall score. Report results transparently across the dimensions relevant to each pathway.
+Do not reduce the evaluation to an arbitrary weighted overall score. Report results transparently across the dimensions relevant to each pathway.
 
 When approaches produce materially similar outcomes, prefer the simpler reproducible solution.
 
