@@ -1,7 +1,6 @@
 """Generate Issue #14 TTS listening evidence and a paragraph-overlay EPUB.
 
-Run ``prepare`` and ``publish`` with the LyrePub Pixi Python; run ``synthesize``
-with the pinned VieNeu environment. Outputs live in gitignored data/.
+Source and model locations are runtime inputs. Outputs live in gitignored data/.
 """
 
 import argparse
@@ -10,8 +9,11 @@ import hashlib
 import importlib
 import json
 import logging
+import os
+import tempfile
 import zipfile
 from datetime import UTC, datetime
+from decimal import Decimal
 from pathlib import Path
 from xml.etree import ElementTree as ET
 
@@ -44,24 +46,38 @@ OPF = "http://www.idpf.org/2007/opf"
 DC = "http://purl.org/dc/elements/1.1/"
 SMIL = "http://www.w3.org/ns/SMIL"
 EPUB = "http://www.idpf.org/2007/ops"
-SAMPLE_RATE = 48_000
-MODEL_REVISION = "61b85e3d937fbbacb387714180e8182823512523"
-CODEC_REVISION = "6aa02b01e445cc585582cf0ba480bc3ea6c8dd68"
 LOGGER = logging.getLogger(__name__)
+
+
+def run_tool(command: list[str], input_text: str | None = None) -> tuple[str, str]:
+    """Run a local tool without a shell, capturing stdout and stderr."""
+    with (
+        tempfile.TemporaryFile() as stdin,
+        tempfile.TemporaryFile() as stdout,
+        tempfile.TemporaryFile() as stderr,
+    ):
+        if input_text is not None:
+            stdin.write(input_text.encode())
+            stdin.seek(0)
+        actions = [
+            (os.POSIX_SPAWN_DUP2, stdout.fileno(), 1),
+            (os.POSIX_SPAWN_DUP2, stderr.fileno(), 2),
+        ]
+        if input_text is not None:
+            actions.append((os.POSIX_SPAWN_DUP2, stdin.fileno(), 0))
+        pid = os.posix_spawnp(command[0], command, os.environ, file_actions=actions)
+        _, status = os.waitpid(pid, 0)
+        stdout.seek(0)
+        stderr.seek(0)
+        out, err = stdout.read().decode(), stderr.read().decode()
+    if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
+        message = f"{command[0]} failed: {err[-1000:]}"
+        raise RuntimeError(message)
+    return out, err
 
 
 def key(spine_index: int, block_index: int) -> str:
     return f"s{spine_index}-b{block_index}"
-
-
-def main_worktree() -> Path:
-    pointer = (Path(__file__).resolve().parents[1] / ".git").read_text()
-    gitdir = Path(pointer.removeprefix("gitdir: ").strip())
-    root = gitdir.parents[2]
-    if not (root / "data" / "bronze" / ISBN).is_dir():
-        message = "main worktree source data not found"
-        raise FileNotFoundError(message)
-    return root
 
 
 def load_records(output: Path) -> list[dict]:
@@ -74,10 +90,11 @@ def save_records(output: Path, records: list[dict]) -> None:
     )
 
 
-def prepare(output: Path) -> None:
+def prepare(output: Path, source: Path) -> None:
     extract_blocks = importlib.import_module("lyrepub.epub_text").extract_blocks
 
-    source = next((main_worktree() / "data" / "bronze" / ISBN).glob("*.epub"))
+    if not source.is_file():
+        raise FileNotFoundError(source)
     blocks = {(b.spine_index, b.block_index): b for b in extract_blocks(source)}
     expected = set(CASES) | set(PLAYBACK)
     records = []
@@ -112,7 +129,7 @@ def prepare(output: Path) -> None:
     (output / "source.json").write_text(
         json.dumps(
             {
-                "path": str(source),
+                "filename": source.name,
                 "sha256": hashlib.sha256(source.read_bytes()).hexdigest(),
             },
             indent=2,
@@ -120,16 +137,6 @@ def prepare(output: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-
-
-def chunk_offsets(lengths: list[int], pads: list[int]) -> list[int]:
-    if len(pads) != max(0, len(lengths) - 1):
-        message = "one gap is required between adjacent chunks"
-        raise ValueError(message)
-    offsets = [0]
-    for length, pad in zip(lengths[:-1], pads, strict=True):
-        offsets.append(offsets[-1] + length + pad)
-    return offsets
 
 
 def source_paragraph(source_epub: Path, record: dict) -> ET.Element:
@@ -169,13 +176,32 @@ def xhtml_document(title: str, paragraphs: list[ET.Element]) -> bytes:
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
 
-def overlay_assets(output: Path, records: dict[str, dict]) -> tuple[dict, list, float]:
-    source = Path(
-        json.loads((output / "source.json").read_text(encoding="utf-8"))["path"]
+def ogg_duration(path: Path) -> Decimal:
+    stdout, _ = run_tool(
+        [
+            "ffprobe",
+            "-v",
+            "error",
+            "-show_entries",
+            "format=duration",
+            "-of",
+            "default=noprint_wrappers=1:nokey=1",
+            str(path),
+        ]
     )
+    duration = Decimal(stdout.strip()).quantize(Decimal("0.001"))
+    if duration <= 0:
+        message = f"invalid packaged audio duration: {path}"
+        raise ValueError(message)
+    return duration
+
+
+def overlay_assets(
+    output: Path, source: Path, records: dict[str, dict]
+) -> tuple[dict, list, Decimal]:
     ET.register_namespace("", XHTML)
     assets = {}
-    duration_total = 0.0
+    duration_total = Decimal(0)
     spine = []
     for spine_index, start, stop, title in (
         (5, 8, 10, "Chương 6: đoạn dài"),
@@ -187,17 +213,25 @@ def overlay_assets(output: Path, records: dict[str, dict]) -> tuple[dict, list, 
         assets[f"EPUB/Text/{name}.xhtml"] = xhtml_document(title, paragraphs)
         smil = ET.Element(f"{{{SMIL}}}smil", {"version": "3.0"})
         body = ET.SubElement(smil, f"{{{SMIL}}}body")
-        duration = 0.0
+        duration = Decimal(0)
         for r in selected:
             case_key = r["key"]
-            mp3 = output / "audio" / f"{case_key}.mp3"
-            seconds = r["duration_seconds"]
-            assets[f"EPUB/Audio/{case_key}.mp3"] = mp3.read_bytes()
+            ogg = output / "audio" / f"{case_key}.ogg"
+            seconds = ogg_duration(ogg)
+            assets[f"EPUB/Audio/{case_key}.ogg"] = ogg.read_bytes()
             par = ET.SubElement(body, f"{{{SMIL}}}par", {"id": f"par-{case_key}"})
             ET.SubElement(
                 par, f"{{{SMIL}}}text", {"src": f"../Text/{name}.xhtml#{case_key}"}
             )
-            ET.SubElement(par, f"{{{SMIL}}}audio", {"src": f"../Audio/{case_key}.mp3"})
+            ET.SubElement(
+                par,
+                f"{{{SMIL}}}audio",
+                {
+                    "src": f"../Audio/{case_key}.ogg",
+                    "clipBegin": "0.000s",
+                    "clipEnd": f"{seconds:.3f}s",
+                },
+            )
             duration += seconds
         assets[f"EPUB/Overlays/{name}.smil"] = ET.tostring(
             smil, encoding="utf-8", xml_declaration=True
@@ -207,7 +241,8 @@ def overlay_assets(output: Path, records: dict[str, dict]) -> tuple[dict, list, 
     return assets, spine, duration_total
 
 
-def publish(output: Path) -> None:
+def publish(output: Path, source: Path) -> None:
+    validate_source(output, source)
     records = {r["key"]: r for r in load_records(output)}
     missing = [
         key(s, b) for s, b in PLAYBACK if records[key(s, b)].get("status") != "ok"
@@ -215,7 +250,7 @@ def publish(output: Path) -> None:
     if missing:
         message = f"cannot publish without playback audio: {missing}"
         raise RuntimeError(message)
-    assets, spine, duration_total = overlay_assets(output, records)
+    assets, spine, duration_total = overlay_assets(output, source, records)
     assets["EPUB/Styles/overlay.css"] = (
         b".-epub-media-overlay-active { background: #ffe07a; color: #111; }\n"
     )
@@ -224,7 +259,9 @@ def publish(output: Path) -> None:
         ET.SubElement(nav, f"{{{XHTML}}}head"), f"{{{XHTML}}}title"
     ).text = "Mục lục"
     body = ET.SubElement(nav, f"{{{XHTML}}}body")
-    toc = ET.SubElement(body, f"{{{XHTML}}}nav", {f"{{{EPUB}}}type": "toc"})
+    toc = ET.SubElement(
+        body, f"{{{XHTML}}}nav", {f"{{{EPUB}}}type": "toc", "role": "doc-toc"}
+    )
     ET.SubElement(toc, f"{{{XHTML}}}h1").text = "Mục lục"
     links = ET.SubElement(toc, f"{{{XHTML}}}ol")
     for name, title, _ in spine:
@@ -242,6 +279,7 @@ def publish(output: Path) -> None:
             "version": "3.0",
             "unique-identifier": "pub-id",
             "prefix": "media: http://www.idpf.org/epub/vocab/overlays/#",
+            "{http://www.w3.org/XML/1998/namespace}lang": "vi",
         },
     )
     metadata = ET.SubElement(package, f"{{{OPF}}}metadata")
@@ -262,6 +300,21 @@ def publish(output: Path) -> None:
     ET.SubElement(
         metadata, f"{{{OPF}}}meta", {"property": "media:duration"}
     ).text = f"{duration_total:.3f}s"
+    for prop, value in (
+        ("schema:accessMode", "textual"),
+        ("schema:accessMode", "auditory"),
+        ("schema:accessModeSufficient", "textual"),
+        ("schema:accessibilityFeature", "synchronizedAudioText"),
+        ("schema:accessibilityHazard", "none"),
+        (
+            "schema:accessibilitySummary",
+            (
+                "Text-only feasibility excerpt with synchronized narration. "
+                "Audio quality and playback usability await human review."
+            ),
+        ),
+    ):
+        ET.SubElement(metadata, f"{{{OPF}}}meta", {"property": prop}).text = value
     manifest = ET.SubElement(package, f"{{{OPF}}}manifest")
     ET.SubElement(
         manifest,
@@ -312,8 +365,8 @@ def publish(output: Path) -> None:
                 f"{{{OPF}}}item",
                 {
                     "id": f"a-{r['key']}",
-                    "href": f"Audio/{r['key']}.mp3",
-                    "media-type": "audio/mpeg",
+                    "href": f"Audio/{r['key']}.ogg",
+                    "media-type": "audio/ogg; codecs=opus",
                 },
             )
     assets["EPUB/package.opf"] = ET.tostring(
@@ -345,19 +398,36 @@ def publish(output: Path) -> None:
     LOGGER.info("Wrote %s", path)
 
 
+def validate_source(output: Path, source: Path) -> None:
+    expected_sha = json.loads((output / "source.json").read_text())["sha256"]
+    if hashlib.sha256(source.read_bytes()).hexdigest() != expected_sha:
+        message = "source EPUB changed since prepare"
+        raise ValueError(message)
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("step", choices=("prepare", "synthesize", "publish"))
     parser.add_argument(
         "--output", type=Path, default=Path("data/issue-14-feasibility")
     )
+    parser.add_argument("--source-epub", type=Path)
+    parser.add_argument("--model", type=Path)
+    parser.add_argument("--voice-dir", type=Path)
+    parser.add_argument("--chunk-helper", type=Path)
     args = parser.parse_args()
+    if args.step in {"prepare", "publish"} and args.source_epub is None:
+        parser.error("--source-epub is required")
     if args.step == "prepare":
-        prepare(args.output)
+        prepare(args.output, args.source_epub)
     elif args.step == "synthesize":
-        importlib.import_module("issue14_synthesis").synthesize(args.output)
+        if any(v is None for v in (args.model, args.voice_dir, args.chunk_helper)):
+            parser.error("synthesize requires --model, --voice-dir, --chunk-helper")
+        importlib.import_module("issue14_synthesis").synthesize(
+            args.output, args.model, args.voice_dir, args.chunk_helper
+        )
     else:
-        publish(args.output)
+        publish(args.output, args.source_epub)
 
 
 if __name__ == "__main__":
