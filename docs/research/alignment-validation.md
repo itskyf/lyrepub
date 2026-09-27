@@ -170,16 +170,31 @@ Qwen's text-only check on each finished WAV contains its intended target; the
 unchanged JSON responses are retained next to the clips. In particular, the
 new track-6 WAV includes the phrase that the listener could not identify in
 the earlier short OGG excerpt.
-These ASR locations are suggestions for listening only. The listener's
-confirmed or corrected word onset, measured to 0.1 s from each WAV's start,
-will be the reference for boundary error. Independent listening-based
-measurements remain pending.
+These ASR locations were suggestions for listening only. The repository owner
+confirmed all four word onsets to 0.1 s from each WAV's start, including 1.9 s
+for the spoken "Hai" that MOSS omitted. The confirmed onsets, rather than ASR
+estimates, are the timing references below.
+
+| Frozen boundary | Confirmed onset in WAV | Reference on source track | Storyteller `clipBegin` | Storyteller minus reference | Absolute error |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Preface heading, track 1 | 26.3 s | 92.2 s | 91.88 s | -0.32 s | 0.32 s |
+| Ordinary narration, track 1 | 26.7 s | 494.5 s | 494.20 s | -0.30 s | 0.30 s |
+| Spoken "Hai", track 2 | 1.9 s | 1.9 s | 1.54 s | -0.36 s | 0.36 s |
+| "Kim đâu?", track 6 | 13.8 s | 917.8 s | 917.30 s | -0.50 s | 0.50 s |
+
+The first, second, and fourth clip-relative values are the owner's confirmation
+of the ASR-located region, rounded to the frozen 0.1-second listening
+precision. The owner separately confirmed 1.9 s for the heading after a
+waveform-based suggestion. This listening was evaluation assistance; it did
+not change chapter mapping, sentence alignment, or Storyteller output.
 
 ## Discussion
 
 The automatic route provides complete section correspondence and sentence
 timings for this source without chapter assistance. Interpolated sentences,
 unmatched headings, and the track-2 audio hole remain limitations for
-synchronization and require focused playback interpretation. The report alone
-cannot establish exact boundary accuracy; that conclusion awaits the frozen
-listening check above.
+synchronization and require focused playback interpretation. All four starts
+in the fixed, manually verified subset precede the heard boundary by 0.30–0.50
+seconds. This small subset does not establish general boundary accuracy. No
+observed blocker requires promoting another ASR route, so native CTC remains
+the frozen alignment route for this source.
