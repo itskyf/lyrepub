@@ -1,34 +1,28 @@
 """Publish timed XHTML fragments as EPUB 3.3 Media Overlays."""
 
-from __future__ import annotations
-
 import math
 import posixpath
 from collections import defaultdict
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
-from typing import TYPE_CHECKING
 from urllib.parse import unquote, urlsplit
-from xml.etree import ElementTree as ET
+from xml.dom import minidom
+from xml.etree.ElementTree import Element, SubElement, tostring
 from zipfile import ZipFile
 
+import defusedxml.minidom
 from defusedxml import ElementTree
-from defusedxml import minidom as safe_minidom
 from fast_ebook import epub
-
-if TYPE_CHECKING:
-    from xml.dom.minidom import Document, Element
 
 _OPF = "http://www.idpf.org/2007/opf"
 _SMIL = "http://www.w3.org/ns/SMIL"
 _XHTML = "http://www.w3.org/1999/xhtml"
 _CONTAINER = "urn:oasis:names:tc:opendocument:xmlns:container"
 _AUDIO = {
-    ".mp3": ("audio/mpeg", "mp3"),
-    ".m4a": ("audio/mp4", "aac"),
-    ".ogg": ("audio/ogg; codecs=opus", "opus"),
-    ".opus": ("audio/ogg; codecs=opus", "opus"),
+    ".mp3": "audio/mpeg",
+    ".opus": "audio/ogg; codecs=opus",
 }
 
 
@@ -69,37 +63,22 @@ def _audio_type(href: str, path: Path) -> str:
     if not path.is_file():
         msg = f"missing audio file: {path}"
         raise ValueError(msg)
-    with path.open("rb") as source:
-        header = source.read(65536)
-    valid = {
-        "mp3": header.startswith(b"ID3") or header[:2] == b"\xff\xfb",
-        "aac": header[4:8] == b"ftyp" and b"mp4a" in header,
-        "opus": header.startswith(b"OggS") and b"OpusHead" in header[:64],
-    }
-    if not valid[media[1]]:
-        msg = f"audio content does not match EPUB media type for {href!r}"
-        raise ValueError(msg)
-    return media[0]
+    return media
 
 
 def _clock(seconds: float | Decimal) -> str:
     return f"{Decimal(str(seconds)):f}s"
 
 
-def _spine_items(
-    archive: ZipFile,
-    book: epub.EpubBook,
-    items: dict[str, Element],
-    opf_dir: str,
-) -> dict[str, tuple[int, str, dict[str, int]]]:
+def _spine_items(book: epub.EpubBook) -> dict[str, tuple[int, str, dict[str, int]]]:
     spine_items: dict[str, tuple[int, str, dict[str, int]]] = {}
     for spine_index, (idref, _linear) in enumerate(book.get_spine()):
-        item = items.get(idref)
-        if item is None or item.getAttribute("media-type") != "application/xhtml+xml":
+        item = book.get_item_with_id(idref)
+        if item is None or item.get_media_type() != "application/xhtml+xml":
             msg = f"invalid XHTML spine item: {idref!r}"
             raise ValueError(msg)
-        href = item.getAttribute("href")
-        root = ElementTree.fromstring(archive.read(_resource_path(href, opf_dir)))
+        href = item.get_name()
+        root = ElementTree.fromstring(item.get_content())
         body = root.find(f"{{{_XHTML}}}body")
         if body is None:
             msg = f"XHTML has no body: {href!r}"
@@ -145,11 +124,6 @@ def _group_timings(
         ):
             msg = f"invalid clip times for {timing.text_href!r}"
             raise ValueError(msg)
-        if Decimal(str(timing.clip_end)) - Decimal(str(timing.clip_begin)) < Decimal(
-            "0.001"
-        ):
-            msg = f"clip shorter than EPUBCheck timing resolution: {timing.text_href!r}"
-            raise ValueError(msg)
         grouped[href].append((position, timing, fragment))
     if set(audio_files) != {t.audio_href for t in timings}:
         msg = "audio files must match referenced audio hrefs"
@@ -158,8 +132,8 @@ def _group_timings(
 
 
 def _add_audio(
-    package: Document,
-    manifest: Element,
+    package: minidom.Document,
+    manifest: minidom.Element,
     audio_files: dict[str, Path],
     opf_dir: str,
     existing_paths: set[str],
@@ -199,8 +173,8 @@ def _add_audio(
 def _smil_content(
     rows: list[tuple[int, Timing, str]], xhtml_path: str, smil_path: str, opf_dir: str
 ) -> tuple[bytes, Decimal]:
-    root = ET.Element("smil", {"xmlns": _SMIL, "version": "3.0"})
-    body = ET.SubElement(root, "body")
+    root = Element("smil", {"xmlns": _SMIL, "version": "3.0"})
+    body = SubElement(root, "body")
     duration = Decimal(0)
     for _, timing, fragment in sorted(
         rows,
@@ -211,14 +185,14 @@ def _smil_content(
             row[1].clip_end,
         ),
     ):
-        par = ET.SubElement(body, "par")
+        par = SubElement(body, "par")
         text_path = posixpath.relpath(xhtml_path, posixpath.dirname(smil_path))
         audio_path = posixpath.relpath(
             _resource_path(timing.audio_href, opf_dir),
             posixpath.dirname(smil_path),
         )
-        ET.SubElement(par, "text", {"src": f"{text_path}#{fragment}"})
-        ET.SubElement(
+        SubElement(par, "text", {"src": f"{text_path}#{fragment}"})
+        SubElement(
             par,
             "audio",
             {
@@ -228,11 +202,11 @@ def _smil_content(
             },
         )
         duration += Decimal(str(timing.clip_end)) - Decimal(str(timing.clip_begin))
-    return ET.tostring(root, encoding="utf-8", xml_declaration=True), duration
+    return tostring(root, encoding="utf-8", xml_declaration=True), duration
 
 
 def _add_overlays(
-    package: Document,
+    package: minidom.Document,
     spine_items: dict[str, tuple[int, str, dict[str, int]]],
     grouped: dict[str, list[tuple[int, Timing, str]]],
     opf_dir: str,
@@ -288,6 +262,23 @@ def _add_overlays(
     return additions
 
 
+def _update_modified(package: minidom.Document) -> None:
+    metadata = package.getElementsByTagNameNS(_OPF, "metadata")[0]
+    modified = [
+        meta
+        for meta in metadata.getElementsByTagNameNS(_OPF, "meta")
+        if meta.getAttribute("property") == "dcterms:modified"
+    ]
+    if len(modified) != 1:
+        msg = "EPUB must have exactly one dcterms:modified value"
+        raise ValueError(msg)
+    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    if modified[0].firstChild is None:
+        modified[0].appendChild(package.createTextNode(timestamp))
+    else:
+        modified[0].firstChild.nodeValue = timestamp
+
+
 def publish_media_overlays(
     source: Path,
     output: Path,
@@ -318,7 +309,7 @@ def publish_media_overlays(
             raise ValueError(msg)
         opf_path = rootfile.attrib["full-path"]
         opf_dir = posixpath.dirname(opf_path)
-        package = safe_minidom.parseString(archive.read(opf_path))
+        package = defusedxml.minidom.parseString(archive.read(opf_path))
         manifest = package.getElementsByTagNameNS(_OPF, "manifest")[0]
         items = {
             item.getAttribute("id"): item
@@ -327,7 +318,7 @@ def publish_media_overlays(
         if any(item.hasAttribute("media-overlay") for item in items.values()):
             msg = "source EPUB already has Media Overlays"
             raise ValueError(msg)
-        spine_items = _spine_items(archive, book, items, opf_dir)
+        spine_items = _spine_items(book)
         grouped = _group_timings(timings, audio_files, spine_items)
         existing_paths = set(archive.namelist()) | {
             item.getAttribute("href") for item in items.values()
@@ -342,6 +333,7 @@ def publish_media_overlays(
                 existing_paths | additions.keys(),
             )
         )
+        _update_modified(package)
         additions[opf_path] = package.toxml(encoding="utf-8")
 
         with ZipFile(output, "w") as result:
