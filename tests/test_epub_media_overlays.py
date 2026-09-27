@@ -10,7 +10,7 @@ from zipfile import ZIP_STORED, ZipFile
 import pytest
 from defusedxml import ElementTree
 
-from lyrepub.epub_media_overlays import Timing, publish_media_overlays
+from lyrepub.epub_media_overlays import Timing, _smil_content, publish_media_overlays
 
 _OPF = "http://www.idpf.org/2007/opf"
 _SMIL = "http://www.w3.org/ns/SMIL"
@@ -41,6 +41,9 @@ def _source(path: Path) -> dict[str, bytes]:
     SubElement(
         metadata, "meta", {"property": "dcterms:modified"}
     ).text = "2026-09-27T00:00:00Z"
+    SubElement(
+        metadata, "meta", {"property": "dcterms:modified", "refines": "#uid"}
+    ).text = "2020-01-01T00:00:00Z"
     manifest = SubElement(package, "manifest")
     for item_id, href, media_type, properties in (
         ("nav", "nav.xhtml", "application/xhtml+xml", "nav"),
@@ -100,34 +103,12 @@ def _source(path: Path) -> dict[str, bytes]:
 
 @pytest.fixture
 def audio(tmp_path: Path) -> Path:
-    ffmpeg = shutil.which("ffmpeg")
-    if ffmpeg is None:
-        msg = "ffmpeg is required to generate the Opus fixture"
+    source = os.environ.get("LYREPUB_TEST_OPUS")
+    if source is None:
+        msg = "run scripts/test_media_overlays.sh to generate the Opus fixture"
         raise RuntimeError(msg)
     path = tmp_path / "tone.opus"
-    args = [
-        ffmpeg,
-        "-hide_banner",
-        "-loglevel",
-        "error",
-        "-f",
-        "lavfi",
-        "-i",
-        "sine=frequency=440:sample_rate=48000:duration=1",
-        "-c:a",
-        "libopus",
-        "-b:a",
-        "16k",
-        "-map_metadata",
-        "-1",
-        "-y",
-        str(path),
-    ]
-    pid = os.posix_spawn(ffmpeg, args, os.environ)
-    _, status = os.waitpid(pid, 0)
-    if os.waitstatus_to_exitcode(status) != 0:
-        msg = "ffmpeg failed to generate the Opus fixture"
-        raise RuntimeError(msg)
+    shutil.copyfile(source, path)
     return path
 
 
@@ -142,6 +123,7 @@ def _timings() -> list[Timing]:
 def test_publish_orders_and_preserves(tmp_path: Path, audio: Path) -> None:
     source, output = tmp_path / "source.epub", tmp_path / "output.epub"
     original = _source(source)
+    output.write_bytes(b"previous build")
     before = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     publish_media_overlays(source, output, _timings(), {"audio/tone.opus": audio})
     after = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
@@ -174,6 +156,7 @@ def test_publish_orders_and_preserves(tmp_path: Path, audio: Path) -> None:
         assert metas[("#lyrepub-smil-0", "media:duration")] == "0.3s"
         assert metas[("#lyrepub-smil-1", "media:duration")] == "0.1s"
         assert metas[(None, "media:duration")] == "0.4s"
+        assert metas[("#uid", "dcterms:modified")] == "2020-01-01T00:00:00Z"
         modified = metas[(None, "dcterms:modified")]
         assert before <= modified <= after
         assert modified != "2026-09-27T00:00:00Z"
@@ -238,12 +221,27 @@ def test_publish_orders_and_preserves(tmp_path: Path, audio: Path) -> None:
     ],
 )
 def test_invalid_inputs(
-    tmp_path: Path, audio: Path, timing: Timing, audio_name: str, message: str
+    tmp_path: Path, timing: Timing, audio_name: str, message: str
 ) -> None:
     source = tmp_path / "source.epub"
     _source(source)
-    supplied = audio if audio_name == "tone.opus" else tmp_path / audio_name
+    supplied = tmp_path / audio_name
     with pytest.raises(ValueError, match=message):
         publish_media_overlays(
             source, tmp_path / "out.epub", [timing], {timing.audio_href: supplied}
         )
+
+
+def test_same_target_clips_keep_caller_order() -> None:
+    rows = [
+        (1, Timing("two.xhtml#second", "audio/last.opus", 0, 0.1), "second"),
+        (0, Timing("two.xhtml#first", "audio/z.opus", 1, 2), "first"),
+        (0, Timing("two.xhtml#first", "audio/a.opus", 0, 1), "first"),
+    ]
+    content, _duration = _smil_content(rows, "two.xhtml", "two.smil", "")
+    smil = ElementTree.fromstring(content)
+    assert [clip.get("src") for clip in smil.iter(f"{{{_SMIL}}}audio")] == [
+        "audio/z.opus",
+        "audio/a.opus",
+        "audio/last.opus",
+    ]

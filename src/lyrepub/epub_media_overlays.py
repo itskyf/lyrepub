@@ -176,15 +176,7 @@ def _smil_content(
     root = Element("smil", {"xmlns": _SMIL, "version": "3.0"})
     body = SubElement(root, "body")
     duration = Decimal(0)
-    for _, timing, fragment in sorted(
-        rows,
-        key=lambda row: (
-            row[0],
-            row[1].clip_begin,
-            row[1].audio_href,
-            row[1].clip_end,
-        ),
-    ):
+    for _, timing, fragment in sorted(rows, key=lambda row: row[0]):
         par = SubElement(body, "par")
         text_path = posixpath.relpath(xhtml_path, posixpath.dirname(smil_path))
         audio_path = posixpath.relpath(
@@ -268,9 +260,10 @@ def _update_modified(package: minidom.Document) -> None:
         meta
         for meta in metadata.getElementsByTagNameNS(_OPF, "meta")
         if meta.getAttribute("property") == "dcterms:modified"
+        and not meta.hasAttribute("refines")
     ]
     if len(modified) != 1:
-        msg = "EPUB must have exactly one dcterms:modified value"
+        msg = "EPUB must have exactly one unrefined dcterms:modified value"
         raise ValueError(msg)
     timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
     if modified[0].firstChild is None:
@@ -292,9 +285,6 @@ def publish_media_overlays(
     """
     if source.resolve() == output.resolve():
         msg = "source and output EPUB must differ"
-        raise ValueError(msg)
-    if output.exists():
-        msg = f"output EPUB already exists: {output}"
         raise ValueError(msg)
     if not timings:
         msg = "at least one timing is required"
