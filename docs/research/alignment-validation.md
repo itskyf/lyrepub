@@ -62,12 +62,12 @@ timestamp. Add the clip offset to obtain the reference track time, then compare
 it with the corresponding Media Overlay `clipBegin`. The clips are derived for
 verification only; they were not alignment inputs.
 
-| Case | Sentence start | Track | Verification clip offset |
+| Case | Sentence start | Track | WAV start on source track |
 | --- | --- | ---: | ---: |
-| Cross-document transition | `section_2.html-s0`, "LỜI NÓI ĐẦU" | 1 | 85 s |
-| Ordinary narration | `section_3.html-s1`, "Khi bọn Bảo Kim tới Bắc Cung…" | 1 | 487 s |
+| Cross-document transition | `section_2.html-s0`, "LỜI NÓI ĐẦU" | 1 | 65.9 s |
+| Ordinary narration | `section_3.html-s1`, "Khi bọn Bảo Kim tới Bắc Cung…" | 1 | 467.8 s |
 | Heading verbalization | `section_4.html-s0`, spoken "Hai" for `II` | 2 | 0 s |
-| Later long-form location | `section_8.html-s183`, "Kim đâu?" | 6 | 910 s |
+| Later long-form location | `section_8.html-s183`, "Kim đâu?" | 6 | 904 s |
 
 Coverage, incorrect or unmatched content, section correspondence, long-form
 failure, runtime, and human assistance are reported as separate observations;
@@ -114,8 +114,66 @@ in track 2 at 1093.06–1098.86 seconds. These are reported output states, not
 manually repaired timings. Storyteller's internal scores were not used as an
 acceptance criterion.
 
-Independent listening-based boundary-error measurements are pending. The
-generated verification clips are retained under `data/issue-15/verification/`.
+### Verification clip pre-check
+
+The first four OGG excerpts are retained only as diagnostic evidence. The
+listener found both track-1 excerpts cut speech at the end, the track-2
+heading lacked clear following context, and the intended words were not heard
+in the short track-6 excerpt. No boundary measurement uses those files.
+
+To locate the frozen targets without selecting a position from Storyteller's
+output, 16 kHz mono PCM windows were decoded from the original MP3s and sent
+to the existing audio.cpp service. Track 1's opening 10 minutes and track 2's
+opening minute were screened in fixed 60-second windows. Track 6's 600–1200 s
+region was screened in the same windows, chosen from the source block's
+position within that section rather than from Storyteller's timestamp. Raw
+responses and the locator WAVs are retained under `data/issue-15/locator/`.
+
+The audio.cpp container image `localhost/audio.cpp:full-cuda13` records source
+revision `955c8725c611d511774e6be132aff6609163b2d2`; its binary reports
+`audio.cpp dev`, Release, gcc 14.2.0, with CPU and CUDA backends. MOSS used the
+existing `moss-transcribe-diarize-bf16.gguf` checkpoint (SHA-256
+`5bc627289e2586fc2d9269afda15a305e545a4ff3512c902889be71d58e56ad5`),
+loaded as `moss_transcribe_diarize`, offline ASR, BF16. The optional Qwen text
+check used the existing `qwen3-asr-1.7b-f16.gguf` checkpoint (SHA-256
+`f12537d4ea56df4e1dcca64a902e0b37fb1111f8ef7fc8e554fd00110be047d0`),
+offline ASR, F16. Both received `language=vi`. Neither model was used to create
+the Storyteller output or the timing reference.
+
+The representative track-6 locator request was:
+
+```sh
+ffmpeg -v error -nostdin -ss 900 -i "$MAIN/data/bronze/9786326186253/dem-hoi-6.mp3" \
+  -t 60 -ac 1 -ar 16000 -c:a pcm_s16le \
+  data/issue-15/locator/track6-0900-0960.wav
+curl -sS -X POST http://127.0.0.1:8080/v1/audio/transcriptions/details \
+  -F model=moss -F language=vi \
+  -F file=@data/issue-15/locator/track6-0900-0960.wav \
+  -o data/issue-15/locator/track6-0900-0960.json
+```
+
+The other fixed 60-second windows used the same conversion and request with
+their recorded filename offsets. Qwen text checks used
+`/v1/audio/transcriptions`, not its word-timestamp path.
+
+| Target | ASR locator result on source track | New PCM WAV clip |
+| --- | --- | --- |
+| Preface heading | MOSS segment "Lời nói đầu" at 92.15–93.47 s | `track1-s1-to-s2-65.9s.wav` (65.9–122.7 s) |
+| Ordinary narration | MOSS segment starts 494.46 s | `track1-ordinary-s3-467.8s.wav` (467.8–529.0 s) |
+| Spoken section II heading | MOSS omitted "Hai"; Qwen recognized it in the original track's 0–7 s window | `track2-heading-0s.wav` (0–34 s) |
+| Later "Kim đâu?" | MOSS segment starts 917.78 s; Qwen confirms the phrase in the 900–960 s window | `track6-later-904s.wav` (904–950.5 s) |
+
+Each new clip was decoded directly from the original track as 16 kHz mono
+signed 16-bit WAV. Starts and ends were placed inside quiet regions identified
+from the original waveform; the first and last 0.2 s of each WAV are quiet.
+Qwen's text-only check on each finished WAV contains its intended target; the
+unchanged JSON responses are retained next to the clips. In particular, the
+new track-6 WAV includes the phrase that the listener could not identify in
+the earlier short OGG excerpt.
+These ASR locations are suggestions for listening only. The listener's
+confirmed or corrected word onset, measured to 0.1 s from each WAV's start,
+will be the reference for boundary error. Independent listening-based
+measurements remain pending.
 
 ## Discussion
 
