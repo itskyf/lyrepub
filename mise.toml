@@ -2,6 +2,7 @@
 "github:immanuwell/dockerfile-roast" = "latest"
 hk = "latest"
 lychee = "latest"
+"npm:@storyteller-platform/align" = "0.2.4"
 pixi = "latest"
 ruff = "latest"
 rumdl = "latest"
