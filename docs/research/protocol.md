@@ -79,7 +79,10 @@ A TTS candidate must:
 - provide usable Vietnamese synthesis;
 - be directly usable through an existing checkpoint, package, API, or equivalent interface;
 - require no training or fine-tuning;
-- be suitable for offline publication generation.
+- be suitable for offline publication generation;
+- provide a practical, reproducible path from synthesized audio to timings suitable for publication synchronization.
+
+Audio-only synthesis without such a timing path is not sufficient for feasibility.
 
 Candidates should use the same source material and common preprocessing where meaningful.
 

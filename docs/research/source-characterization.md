@@ -205,7 +205,7 @@ Observed at the coarsest useful level:
   track: range 10.8–11.7, median 11.3 (`audiobook_report.txt`) —
   descriptive only, not evidence of correspondence.
 - Limits: no sentence alignment, no ASR; finer insert/omit/repeat
-  detection inside sections is deferred to the synchronization work (#12).
+  detection inside sections is deferred to the alignment pilot and evaluation (#13, #15).
 
 ## Benchmark candidates for #13
 
