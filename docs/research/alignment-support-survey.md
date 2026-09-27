@@ -1,77 +1,65 @@
-# Alignment-support survey — September 2026
+# Alignment-support survey - September 2026
 
-**Purpose.** Survey directly usable speech-recognition, forced-alignment, and ASR-free components that could make the existing-audiobook pathway practical for Issue [#13](https://github.com/itskyf/lyrepub/issues/13), with particular attention to Storyteller `stalign`. This is pre-pilot evidence, not a final candidate selection or experiment result. Follow [source characterization](source-characterization.md) for the selected EPUB/audiobook structure and observed mismatches, and [protocol](protocol.md) for the research contract. No training or fine-tuning, new alignment architecture, exhaustive ASR benchmark, or production infrastructure is proposed.
+**Purpose.** Record the directly usable alignment landscape relevant to Issue [#13](https://github.com/itskyf/lyrepub/issues/13) and the resulting route-selection strategy for the existing-audiobook pathway. This is survey evidence, not an ASR benchmark or alignment experiment. Follow [source characterization](source-characterization.md) for the selected EPUB/audiobook structure and [protocol](protocol.md) for the research method.
 
-**Evidence notation.** **D** = capability or interface documented by the model/tool author or official implementation; **A** = author-reported or author-demonstrated behavior/evaluation; **P** = behavior still unverified by this project and requiring a feasibility pilot if promoted. Public benchmark or model-card numbers remain author evidence, not LyrePub results. Sources were checked through 27 September 2026.
+**Evidence notation.** **D** = documented by the tool/model author or official implementation; **A** = author-reported or author-demonstrated behavior; **P** = behavior not yet verified by this project. Sources were checked through 27 September 2026. Author claims are not LyrePub results.
 
-## Current landscape
+## Selected implementation family
 
-The most important recent change is inside Storyteller itself. The current `stalign` implementation supports both the established transcription-driven path and a new **CTC-emission forced-alignment path**. Storyteller's [21 September `align-v0.2.3` release](https://gitlab.com/storyteller-platform/storyteller/-/tags) follows the new CTC aligner and runtime fixes. The current CLI exposes `align --ctc --emissions ...`, and its pipeline can generate emissions and align them directly instead of first producing an ASR transcript ([alignment parser](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/align/parse.ts), [pipeline](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/cli/bin.ts)).
+**Storyteller `stalign`** is selected as the alignment implementation family. Its current source exposes two materially different native route families:
 
-That changes the feasibility question for this project. A general ASR system is no longer necessarily required: the first pilot can test whether Storyteller's own multilingual CTC path aligns Vietnamese EPUB text directly to the audiobook well enough. The existing transcription path remains useful as a materially different fallback/comparator.
+- **CTC emissions -> forced alignment**, selected as the first route;
+- **transcription -> text matching/alignment**, with built-in `whisper.cpp` and other transcription backends.
 
-For external ASR, `stalign` already consumes transcription JSON containing a transcript and timeline ([writer](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/transcribe/transcribe.ts), [reader](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/align/align.ts)). Timeline entries carry text and start/end times, with transcript offsets used by the aligner ([timeline type](https://github.com/smoores-dev/storyteller/blob/main/libraries/ghost-story/src/utilities/Timeline.ts), [mapping](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/align/getSentenceRanges.ts)). Therefore an external timestamp-producing ASR can be paired with the existing aligner through a small deterministic format adapter; this does not justify modifying the ASR model or inventing a project-specific alignment abstraction.
+The current CTC pipeline can generate emissions with a multilingual Wav2Vec2/MMS forced-aligner model and align EPUB reference text directly, without first producing an ASR transcript ([CLI pipeline](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/cli/bin.ts), [emission options](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/emit/parse.ts), [alignment options](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/align/parse.ts)). This is the smallest native route because it does not require an external ASR adapter.
 
-## Serious candidates and supporting paths
+Issue #15 therefore begins with native CTC. If that route produces timing output usable for protocol evaluation without a blocking material failure on the selected source, freeze it and stop route exploration. If a blocking material failure is observed, retain the evidence and stop for project-owner review before promoting another documented route. Do not implement an automatic fallback chain.
 
-| Candidate / path | Vietnamese and timing evidence | Practical and integration constraints | Survey disposition |
-| --- | --- | --- | --- |
-| **Storyteller `stalign` native CTC + MMS forced-aligner ONNX** | D: current `stalign` can align from CTC emissions instead of transcriptions. Its emission stage defaults to [`onnx-community/mms-300m-1130-forced-aligner-ONNX`](https://huggingface.co/onnx-community/mms-300m-1130-forced-aligner-ONNX), whose card documents 158-language forced-alignment use; the upstream [CTC forced aligner](https://github.com/MahmoudAshraf97/ctc-forced-aligner) documents broad MMS/ISO-639-3 coverage with universal romanization. The converted ONNX card does not separately demonstrate Vietnamese audiobook alignment, so Vietnamese suitability remains P. | Native Storyteller path; no external transcript adapter. Current implementation exposes CPU/CUDA/WebGPU selection and fp32/fp16/q8 choices ([emit parser](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/emit/parse.ts)). Model card license is CC-BY-NC-4.0. | **Core feasibility pilot.** P: Vietnamese normalization/transliteration, sentence/word coverage, handling of inserted speech and verbalized headings, and long-form drift on the selected material. |
-| **Storyteller `stalign` + built-in `whisper.cpp`, `large-v3-turbo`** | D: Storyteller's current transcription backend supports multilingual Whisper models including `large-v3-turbo`, and its language list includes `vi` ([constants](https://github.com/smoores-dev/storyteller/blob/main/libraries/ghost-story/src/constants.ts)). OpenAI documents multilingual transcription and sliding 30-second processing; Whisper code/weights are MIT ([README](https://github.com/openai/whisper/blob/main/README.md)). | Completely native `stalign` transcription path and JSON/timeline generation. Storyteller has CPU, BLAS, CUDA, ROCm, Vulkan, SYCL and Apple paths depending on platform/build. Parallel transcription can affect timestamp behavior, so feasibility should use a simple recorded configuration rather than tuning throughput. | **Core feasibility pilot.** P: Vietnamese transcript/timestamp adequacy on this narrator and whether transcript-based matching is more robust than native CTC for source/audio mismatches. |
-| **[PhoASR-whisper-small](https://huggingface.co/Qualcomm-AI-Research/PhoASR-whisper-small) → `stalign` transcription JSON** | D: Vietnamese-specific Whisper-small checkpoint; official Transformers example uses `chunk_length_s=30` and `return_timestamps="word"`. A: authors report a 3,000-hour Vietnamese fine-tune and clean transcripts with timestamps, punctuation and capitalization; accompanying work is Findings of EACL 2026. | Public ~0.2B checkpoint (~973 MB repository); documented CPU/CUDA Transformers path pinned to `transformers==4.48.0`. BSD-3-Clause-Clear plus Qualcomm Responsible AI terms. Requires only deterministic conversion of its own transcript/word timestamps to Storyteller's existing JSON shape, including consistent transcript offsets. | **Core feasibility pilot.** P: stability of chunked word times across audiobook tracks, clean adapter semantics, and whether Vietnamese specialization improves downstream alignment over built-in Whisper. |
-| **[NVIDIA Parakeet-CTC-0.6B-Vietnamese](https://huggingface.co/nvidia/parakeet-ctc-0.6b-Vietnamese) → `stalign` transcription JSON** | D: Vietnamese-specific CTC checkpoint; official NeMo inference exposes char-, word-, and segment-level timestamps. A: NVIDIA provides Vietnamese ASR evaluation/training evidence in the model card. | Public NeMo checkpoint (~2.44 GB weights; repository ~2.62 GB), NVIDIA Open Model License. Official path is NeMo/PyTorch and operationally heavier than PhoASR; NVIDIA-oriented CUDA environments are the natural path. Use its reported word timeline as external ASR output rather than trying to inject incompatible raw emissions into Storyteller's MMS CTC format. | **Conditional pilot.** Useful only if the first three leave a timestamp-specific uncertainty and suitable NVIDIA hardware is already available. |
-| **[kb-labb/easyaligner](https://github.com/kb-labb/easyaligner)** | D: forced alignment from reference or ASR-generated transcripts; GPU-accelerated long-audio alignment, VAD/emission/alignment stages, and JSON outputs. Official tutorials explicitly cover full transcript, known partial region, and unknown partial region; the README demonstrates audiobook material. | MIT; Python/PyTorch/Transformers stack. Directly usable as a standalone aligner, but its outputs would need a separate publication-integration step to reach EPUB Media Overlays. | **Reserve / diagnostic alternative.** It substantially overlaps the new native CTC role; promote only if `stalign` CTC fails in a way that requires separating acoustic alignment from Storyteller's implementation. |
-| **[Qwen3-ASR](https://qwen.ai/blog?id=qwen3asr) through [`audio.cpp`](https://github.com/0xShug0/audio.cpp/blob/main/docs/models/qwen3.md)** | D: Qwen3-ASR supports Vietnamese and official Qwen reports single-audio transcription up to 20 minutes. `audio.cpp` adds long-audio chunking and an optional word-timestamp output. However, those word timestamps are produced by Qwen3-ForcedAligner-0.6B, whose official supported languages are only Chinese, Cantonese, English, German, Spanish, French, Italian, Portuguese, Russian, Korean and Japanese — **not Vietnamese** ([aligner config](https://huggingface.co/Qwen/Qwen3-ForcedAligner-0.6B/blob/main/config.json)). | Apache-2.0 models; `audio.cpp` offers native C++/GGUF inference. Vietnamese ASR text is directly usable, but the attractive `--words-out` path does not currently establish Vietnamese timestamp support. Pairing Qwen text with a second aligner adds complexity already covered by Storyteller CTC/easyaligner. | **Not first-pass.** Revisit if Qwen's forced aligner gains Vietnamese or if transcript quality becomes a demonstrated blocker independent of timestamps. |
-| **[Microsoft VibeVoice-ASR-7B](https://github.com/microsoft/VibeVoice/blob/main/docs/vibevoice-asr.md)** | D: >50 languages, structured speaker/timestamp/text output, and up to 60-minute single-pass audio. Vietnamese appears in the project's language evaluation/distribution. | MIT repository; official instructions recommend NVIDIA CUDA containers. ~7B-class rich ASR/diarization is much heavier than needed for a single-narrator book, and its structured utterance timestamps are not the light word-timeline interface `stalign` naturally consumes. | **Excluded from first-pass.** Strong long-form capability, but disproportionate runtime/interface complexity for the present alignment question. |
+## Route landscape
 
-## Recent Vietnamese adaptations checked
+The remaining entries are escalation evidence, not required experiment arms.
 
-Recent model-hub work matters because a major multilingual checkpoint is not necessarily the most useful Vietnamese transcription source. These models were checked but do not currently add a distinct first-pass alignment question:
-
-- [BuzzASR/vietnamese](https://huggingface.co/BuzzASR/vietnamese) — D: Vietnamese Whisper-large-v3 fine-tune, MIT; A: Findings of EMNLP 2026 results on FLEURS/combined evaluation. Its documented usage is transcript generation, not a stronger word-timestamp integration path than PhoASR.
-- [undertheseanlp/asr-1](https://huggingface.co/undertheseanlp/asr-1) — D: Vietnamese Whisper-large-v3 fine-tune with a standard Transformers ASR interface, Apache-2.0. The current card does not establish a distinct timestamp/long-form advantage for `stalign`.
-- [tyanfarm/Qwen3-ASR-1.7B-334h](https://huggingface.co/tyanfarm/Qwen3-ASR-1.7B-334h) — D: 69 MB LoRA over Qwen3-ASR-1.7B, trained on 334 hours of Vietnamese; A: card reports held-out improvements and tests through 60-second segments. CC-BY-NC-SA-4.0. It improves the ASR side but does not remove the Qwen forced-aligner's lack of Vietnamese timestamp support.
-- The smaller [Qwen3-ASR-1.7B-34h](https://huggingface.co/tyanfarm/Qwen3-ASR-1.7B-34h) adaptation is also available, but its own card describes a narrower domain-adaptation role and does not create a separate alignment path.
-
-No gated/access-controlled model found in this survey adds a necessary capability absent from the public shortlist. Managed services or hosted inference may be usable, but they add account/service dependencies without solving a project requirement better than the local paths above.
-
-## `stalign` interface and source-material implications
-
-The legacy/current transcription aligner does not require a particular ASR vendor. It reads Storyteller transcription JSON and then fuzzy/error-aligns transcript text against segmented EPUB text before generating sentence/word ranges and EPUB Media Overlays. External ASR integration should therefore be limited to producing the existing input shape from the candidate's **own** transcript and timestamps. It must not replace recognized text with EPUB reference text.
-
-The CTC path is methodologically different: reference EPUB text is an explicit input to forced alignment, which the research protocol already permits. Current Storyteller source directly creates Media Overlays from CTC alignments and reports unmatched chapters/audio ranges. This path should be reported as forced alignment, not ASR with a repaired transcript.
-
-The selected audiobook's track-to-spine correspondence, inserted opening announcement, heading verbalization, and narratable/non-narratable spine items are already recorded in [source characterization](source-characterization.md). The pilots should use those known observations rather than duplicating or re-deriving them here. They are especially useful for checking whether a candidate survives ordinary source/audio disagreement without silent repair.
-
-## Small feasibility shortlist
-
-The survey supports three first-pass paths plus one conditional path. This is not an ordering and does not freeze the final experiment.
-
-| Pilot path | Why it adds a distinct feasibility question | Uncertainty to resolve |
+| Route or component | Relevant documented evidence and constraint | Disposition |
 | --- | --- | --- |
-| **A. `stalign` native CTC + current MMS forced-aligner model** | Simplest ASR-free path and now native to the target publication tool. | Does the released CTC path actually align Vietnamese audiobook speech to EPUB text with usable sentence/word coverage and timing, including known insertions/verbalizations, without long-form drift? |
-| **B. `stalign` + built-in `whisper.cpp` `large-v3-turbo`** | Native transcript-driven path with no adapter; provides a different failure mode from reference-text forced alignment. | Are Vietnamese transcription and word timings adequate for Storyteller matching, and does this path handle source/audio mismatch more robustly than CTC? |
-| **C. PhoASR-whisper-small → existing Storyteller transcription format** | Vietnamese-specialized, lightweight ASR with documented word timestamps; tests whether language specialization improves the transcript-driven path. | Do 30-second chunk timestamps remain coherent on the selected audiobook, can the existing Storyteller JSON interface be populated without repair logic, and does downstream alignment materially improve? |
-| **D. Parakeet-CTC-0.6B-Vietnamese → existing Storyteller transcription format, conditional** | Vietnamese-specific CTC ASR with documented word/segment/character timestamps; useful to isolate timestamp quality if needed. | If A–C fail on timing, does an independently timestamped Vietnamese CTC system succeed, or is the remaining problem in Storyteller's text matching/publication path? |
+| **`stalign` native CTC + MMS forced-aligner emissions** | D: native emissions and CTC alignment path; current default emission model is `onnx-community/mms-300m-1130-forced-aligner-ONNX`. Reference EPUB text is an explicit forced-alignment input. Vietnamese audiobook suitability remains P. | **First route for #15.** |
+| **`stalign` + built-in `whisper.cpp`** | D: native transcription route with multilingual Whisper models and Storyteller's own transcription/timeline format. Processor parallelism may affect timing accuracy, so materially relevant settings must be recorded. | First native escalation option if CTC has a blocking failure and review approves it. |
+| **[PhoASR-whisper-small](https://huggingface.co/Qualcomm-AI-Research/PhoASR-whisper-small) -> Storyteller transcription format** | D: Vietnamese-specific Whisper checkpoint with word timestamps through its documented Transformers path. Requires a deterministic adapter to Storyteller's existing transcript/timeline shape. | External-ASR escalation option; do not implement unless justified by observed failure. |
+| **[NVIDIA Parakeet-CTC-0.6B-Vietnamese](https://huggingface.co/nvidia/parakeet-ctc-0.6b-Vietnamese) -> Storyteller transcription format** | D: Vietnamese-specific CTC ASR with character, word, and segment timestamps. Heavier NeMo/PyTorch environment. | Conditional diagnostic option if timing remains the demonstrated blocker. |
+| **[easyaligner](https://github.com/kb-labb/easyaligner)** | D: standalone forced alignment for long audio and reference/ASR transcripts, including partial-region workflows. Duplicates much of the native CTC role and needs separate publication integration. | Reserve only if the failure is specific to Storyteller's CTC implementation. |
+| **[Qwen3-ASR](https://qwen.ai/blog?id=qwen3asr) / `audio.cpp`** | D: Vietnamese ASR text is supported, but the associated Qwen forced-aligner language set does not currently establish Vietnamese timestamp support. | Not a current escalation path. |
+| **[VibeVoice-ASR](https://github.com/microsoft/VibeVoice/blob/main/docs/vibevoice-asr.md)** | D: multilingual long-form structured ASR, including Vietnamese evidence, but with a much heavier model/runtime and an interface that does not simplify the present task. | Not justified for this coursework path. |
 
-For the feasibility stage, run only enough representative material to establish whether each promoted path is runnable and produces inspectable alignment output under the protocol. The existing source characterization should determine which ordinary and mismatch-bearing material is useful. This survey does not introduce new benchmark categories, thresholds, scores, or acceptance criteria.
+Other Vietnamese ASR adaptations found during the survey remain alternatives only. Better transcription benchmark results do not by themselves establish better EPUB/audio alignment and do not justify a broad ASR comparison.
 
-## Project-unverified claims and checks
+## Source-material implications
 
-The following remain **P** until Issue #13 pilots are run:
+The selected audiobook already contains the alignment conditions that matter for feasibility:
 
-- Storyteller's new MMS/CTC route works correctly for Vietnamese diacritics, its transliteration/slugification path, number verbalization, and the selected audiobook's narrator.
-- Either Storyteller path preserves useful boundaries across inserted/non-matching speech and does not hide excessive interpolation or drift.
-- `large-v3-turbo` is the appropriate built-in Whisper configuration for this audiobook; availability in Storyteller is documented, but quality here is not.
-- PhoASR's author-described timestamp quality transfers from its benchmark/use examples to multi-minute audiobook tracks and converts cleanly into Storyteller timeline offsets.
-- Parakeet's documented NeMo timestamps provide a practical benefit large enough to justify its heavier environment.
-- Author-reported ASR benchmark improvements for PhoASR, BuzzASR, UnderTheSea ASR-1, Qwen adaptations, Qwen3-ASR, or VibeVoice translate into better EPUB alignment. Recognition metrics alone are not alignment results.
-- The current licenses and dependency terms are acceptable for the exact coursework artifacts ultimately distributed. Record the model/checkpoint and runtime revisions actually used if a candidate is promoted.
+- audiobook tracks and EPUB spine documents are not one-to-one;
+- track 1 spans multiple spine documents;
+- the audiobook contains an opening announcement absent from the EPUB;
+- some headings or publication text may be verbalized differently;
+- navigational coverage is not equivalent to synchronization coverage.
 
-A pilot failure must be retained as evidence; do not substitute EPUB text into an ASR transcript, manually sentence-align the output, or change the candidate/configuration merely to make a run pass. Candidate-specific conversion required by a documented interface is allowed when recorded.
+These observations are recorded in [source characterization](source-characterization.md) and should not be duplicated as new benchmark categories. They are used in #15 to determine whether a route tolerates ordinary source/audio disagreement without silent repair.
+
+The CTC route uses EPUB reference text explicitly, which is permitted by the protocol for forced alignment. A transcription-driven route, if later approved, must preserve its own recognized text; do not silently substitute EPUB reference text into ASR output.
+
+## What remains for #15
+
+The survey selects the implementation family and first route but does not establish that CTC works on the selected Vietnamese audiobook.
+
+The initial feasibility run should retain enough evidence to inspect:
+
+- whether the route runs reproducibly with the selected EPUB and audiobook;
+- synchronization coverage and unmatched source/audio regions;
+- behavior around the known inserted announcement and cross-document track;
+- timing output and reports needed for protocol evaluation;
+- any required chapter assistance or other human intervention;
+- materially relevant tool/model settings.
+
+No numeric pass threshold is introduced here. If a blocking material failure is observed, retain the failing output and report the failure before changing routes. Route selection, synchronization granularity, benchmark items, timing-error verification procedure, and human-assistance conditions are frozen before the reported #15 evaluation.
 
 ## Survey conclusion
 
-The current landscape does **not** justify a broad ASR benchmark. The September Storyteller CTC release makes the native ASR-free route the key new feasibility path. The smallest useful first pass is therefore: native `stalign` CTC, native `stalign` Whisper, and PhoASR through Storyteller's existing transcription interface. Parakeet is a conditional fourth path if timing remains unresolved. `easyaligner` is the most relevant standalone forced-alignment reserve; Qwen3-ASR/`audio.cpp` becomes more attractive if Vietnamese forced-alignment support arrives. VibeVoice and recent Vietnamese ASR fine-tunes remain documented alternatives rather than required pilots.
-
-Nothing in this survey selects a final alignment system or freezes benchmark items, inference settings, preprocessing, or human-assistance conditions.
+The survey does not justify a multi-candidate alignment benchmark. Storyteller `stalign` is the selected implementation family, with native CTC as the first route because it is the smallest direct path from audiobook audio and EPUB reference text to alignment output. Other routes remain documented escalation options only when an observed failure creates a specific need.
