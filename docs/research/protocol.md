@@ -138,6 +138,21 @@ If ASR is used, its output must not be silently replaced by reference EPUB text.
 
 Reference EPUB text may be used explicitly when required by a forced-alignment method.
 
+#### Frozen Issue #15 evaluation
+
+Run the automatic condition on the complete Đêm hội Long Trì EPUB and all seven audiobook tracks. Use chapter assistance only if the automatic run exposes a coarse chapter/section correspondence problem; do not run a redundant assisted condition when automatic correspondence is usable.
+
+The fixed manual timing subset contains these four sentence starts:
+
+| Case | Track | Sentence start |
+| --- | ---: | --- |
+| Cross-document transition | 1 | `section_2.html-s0`, "LỜI NÓI ĐẦU" |
+| Ordinary narration | 1 | `section_3.html-s1`, "Khi bọn Bảo Kim tới Bắc Cung…" |
+| Heading verbalization | 2 | `section_4.html-s0`, spoken "Hai" for `II` |
+| Later long-form location | 6 | `section_8.html-s183` (source block 93), "Kim đâu?" |
+
+For each boundary, a listener confirms the first audible phoneme at approximately 0.1-second precision in a PCM WAV excerpt with recorded source-track offset and quiet clip boundaries. Add that offset to obtain the reference track time and compare it with the full-run Media Overlay `clipBegin`; report errors at the listening precision. ASR may locate candidate regions for listening, but its timestamps are not timing references. These excerpts are verification material only, never separate alignment inputs.
+
 ## 6. Benchmark and Experimental Procedure
 
 The benchmark is derived from the selected books and contains:

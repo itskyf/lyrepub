@@ -47,31 +47,12 @@ These generated paths are ignored locally. The processed-track `.source.json`
 files and report confirm numeric track order 1–7. The retained emissions and
 marked-up EPUB permit diagnosis without repeating model inference.
 
-## Frozen evaluation procedure
+## Evaluation run
 
-The full automatic alignment is the only model input and run. After the
-feasibility report showed all nine narratable spine documents on the expected
-tracks, the native CTC route above was frozen for evaluation. Automatic
-correspondence was usable, so the chapter-assisted condition is not applicable;
-human chapter or sentence alignment assistance is **none**.
-
-Before measuring boundary error, the following four source-derived sentence
-starts were frozen. A listener records the first audible phoneme from each
-local verification clip to about 0.1 second, without using Storyteller's
-timestamp. Add the clip offset to obtain the reference track time, then compare
-it with the corresponding Media Overlay `clipBegin`. The clips are derived for
-verification only; they were not alignment inputs.
-
-| Case | Sentence start | Track | WAV start on source track |
-| --- | --- | ---: | ---: |
-| Cross-document transition | `section_2.html-s0`, "LỜI NÓI ĐẦU" | 1 | 65.9 s |
-| Ordinary narration | `section_3.html-s1`, "Khi bọn Bảo Kim tới Bắc Cung…" | 1 | 467.8 s |
-| Heading verbalization | `section_4.html-s0`, spoken "Hai" for `II` | 2 | 0 s |
-| Later long-form location | `section_8.html-s183`, "Kim đâu?" | 6 | 904 s |
-
-Coverage, incorrect or unmatched content, section correspondence, long-form
-failure, runtime, and human assistance are reported as separate observations;
-no aggregate score or acceptance threshold is imposed.
+The evaluation follows the [frozen Issue #15 procedure](protocol.md#frozen-issue-15-evaluation).
+Native CTC was frozen after feasibility inspection. Automatic correspondence
+was usable, so no chapter-assisted condition or manual alignment correction
+was used.
 
 The reported alignment reused the frozen emissions and marked-up EPUB without
 rerunning inference:
@@ -103,8 +84,8 @@ The Storyteller report records 3,379 sentence targets: 3,319 aligned, 54
 interpolated, six unmatched, and none dropped. It records 16,181.26 matched
 audio seconds, 213.18 interpolated seconds, and 13.76 loose seconds. Track 1
 covers the author biography, preface, and section I in sequence; tracks 2–7
-cover sections II–VII one-to-one. No section-level drift or missing track was
-observed in the report, including at the ends of the long tracks.
+cover sections II–VII one-to-one. No section-level correspondence failure or missing track was observed in the
+report.
 
 The opening announcement absent from the EPUB appears as a 0–7.96-second
 audio-only hole. The six unmatched sentences are the Roman-numeral headings
@@ -114,73 +95,33 @@ in track 2 at 1093.06–1098.86 seconds. These are reported output states, not
 manually repaired timings. Storyteller's internal scores were not used as an
 acceptance criterion.
 
-### Verification clip pre-check
+### Manual boundary verification
 
-The first four OGG excerpts are retained only as diagnostic evidence. The
-listener found both track-1 excerpts cut speech at the end, the track-2
-heading lacked clear following context, and the intended words were not heard
-in the short track-6 excerpt. No boundary measurement uses those files.
+MOSS BF16 and Qwen3-ASR F16 through the existing audio.cpp service (image
+revision `955c8725c611d511774e6be132aff6609163b2d2`) were convenience tools for
+locating and checking clean verification clips, not evaluated routes or timing
+references. The repository owner confirmed the four target onsets in 16 kHz
+mono signed 16-bit PCM WAV clips decoded from the original tracks. Clip
+boundaries fall in quiet regions. The invalid preliminary OGG excerpts were
+discarded; they contribute no reported measurement.
 
-To locate the frozen targets without selecting a position from Storyteller's
-output, 16 kHz mono PCM windows were decoded from the original MP3s and sent
-to the existing audio.cpp service. Track 1's opening 10 minutes and track 2's
-opening minute were screened in fixed 60-second windows. Track 6's 600–1200 s
-region was screened in the same windows, chosen from the source block's
-position within that section rather than from Storyteller's timestamp. Raw
-responses and the locator WAVs are retained under `data/issue-15/locator/`.
+| Verification WAV | Source-track start | Source-track end |
+| --- | ---: | ---: |
+| `track1-s1-to-s2-65.9s.wav` | 65.9 s | 122.7 s |
+| `track1-ordinary-s3-467.8s.wav` | 467.8 s | 529.0 s |
+| `track2-heading-0s.wav` | 0 s | 34 s |
+| `track6-later-904s.wav` | 904 s | 950.5 s |
 
-The audio.cpp container image `localhost/audio.cpp:full-cuda13` records source
-revision `955c8725c611d511774e6be132aff6609163b2d2`; its binary reports
-`audio.cpp dev`, Release, gcc 14.2.0, with CPU and CUDA backends. MOSS used the
-existing `moss-transcribe-diarize-bf16.gguf` checkpoint (SHA-256
-`5bc627289e2586fc2d9269afda15a305e545a4ff3512c902889be71d58e56ad5`),
-loaded as `moss_transcribe_diarize`, offline ASR, BF16. The optional Qwen text
-check used the existing `qwen3-asr-1.7b-f16.gguf` checkpoint (SHA-256
-`f12537d4ea56df4e1dcca64a902e0b37fb1111f8ef7fc8e554fd00110be047d0`),
-offline ASR, F16. Both received `language=vi`. Neither model was used to create
-the Storyteller output or the timing reference.
+The WAVs are retained under `data/issue-15/verification/`. The table below
+keeps raw Storyteller timestamps separately from the approximately
+0.1-second manual references and errors.
 
-The representative track-6 locator request was:
-
-```sh
-ffmpeg -v error -nostdin -ss 900 -i "$MAIN/data/bronze/9786326186253/dem-hoi-6.mp3" \
-  -t 60 -ac 1 -ar 16000 -c:a pcm_s16le \
-  data/issue-15/locator/track6-0900-0960.wav
-curl -sS -X POST http://127.0.0.1:8080/v1/audio/transcriptions/details \
-  -F model=moss -F language=vi \
-  -F file=@data/issue-15/locator/track6-0900-0960.wav \
-  -o data/issue-15/locator/track6-0900-0960.json
-```
-
-The other fixed 60-second windows used the same conversion and request with
-their recorded filename offsets. Qwen text checks used
-`/v1/audio/transcriptions`, not its word-timestamp path.
-
-| Target | ASR locator result on source track | New PCM WAV clip |
-| --- | --- | --- |
-| Preface heading | MOSS segment "Lời nói đầu" at 92.15–93.47 s | `track1-s1-to-s2-65.9s.wav` (65.9–122.7 s) |
-| Ordinary narration | MOSS segment starts 494.46 s | `track1-ordinary-s3-467.8s.wav` (467.8–529.0 s) |
-| Spoken section II heading | MOSS omitted "Hai"; Qwen recognized it in the original track's 0–7 s window | `track2-heading-0s.wav` (0–34 s) |
-| Later "Kim đâu?" | MOSS segment starts 917.78 s; Qwen confirms the phrase in the 900–960 s window | `track6-later-904s.wav` (904–950.5 s) |
-
-Each new clip was decoded directly from the original track as 16 kHz mono
-signed 16-bit WAV. Starts and ends were placed inside quiet regions identified
-from the original waveform; the first and last 0.2 s of each WAV are quiet.
-Qwen's text-only check on each finished WAV contains its intended target; the
-unchanged JSON responses are retained next to the clips. In particular, the
-new track-6 WAV includes the phrase that the listener could not identify in
-the earlier short OGG excerpt.
-These ASR locations were suggestions for listening only. The repository owner
-confirmed all four word onsets to 0.1 s from each WAV's start, including 1.9 s
-for the spoken "Hai" that MOSS omitted. The confirmed onsets, rather than ASR
-estimates, are the timing references below.
-
-| Frozen boundary | Confirmed onset in WAV | Reference on source track | Storyteller `clipBegin` | Storyteller minus reference | Absolute error |
+| Frozen boundary | Confirmed onset in WAV | Reference on source track | Storyteller `clipBegin` | Approximate signed error | Approximate absolute error |
 | --- | ---: | ---: | ---: | ---: | ---: |
-| Preface heading, track 1 | 26.3 s | 92.2 s | 91.88 s | -0.32 s | 0.32 s |
-| Ordinary narration, track 1 | 26.7 s | 494.5 s | 494.20 s | -0.30 s | 0.30 s |
-| Spoken "Hai", track 2 | 1.9 s | 1.9 s | 1.54 s | -0.36 s | 0.36 s |
-| "Kim đâu?", track 6 | 13.8 s | 917.8 s | 917.30 s | -0.50 s | 0.50 s |
+| Preface heading, track 1 | 26.3 s | 92.2 s | 91.88 s | -0.3 s | 0.3 s |
+| Ordinary narration, track 1 | 26.7 s | 494.5 s | 494.20 s | -0.3 s | 0.3 s |
+| Spoken "Hai", track 2 | 1.9 s | 1.9 s | 1.54 s | -0.4 s | 0.4 s |
+| "Kim đâu?", track 6 | 13.8 s | 917.8 s | 917.30 s | -0.5 s | 0.5 s |
 
 The first, second, and fourth clip-relative values are the owner's confirmation
 of the ASR-located region, rounded to the frozen 0.1-second listening
@@ -194,7 +135,7 @@ The automatic route provides complete section correspondence and sentence
 timings for this source without chapter assistance. Interpolated sentences,
 unmatched headings, and the track-2 audio hole remain limitations for
 synchronization and require focused playback interpretation. All four starts
-in the fixed, manually verified subset precede the heard boundary by 0.30–0.50
-seconds. This small subset does not establish general boundary accuracy. No
+in the fixed, manually verified subset precede the heard boundary by approximately
+0.3, 0.3, 0.4, and 0.5 seconds, respectively. This small subset does not establish general boundary accuracy. No
 observed blocker requires promoting another ASR route, so native CTC remains
 the frozen alignment route for this source.
