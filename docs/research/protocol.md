@@ -140,6 +140,8 @@ Reference EPUB text may be used explicitly when required by a forced-alignment m
 
 #### Frozen Issue #15 evaluation
 
+Issue #15 freezes the audiobook-alignment experiment to Storyteller native CTC with the MMS forced-aligner, Vietnamese, at sentence granularity. This experiment-specific freeze does not freeze the final Media Overlay granularity for Issues #14/#16.
+
 Run the automatic condition on the complete Đêm hội Long Trì EPUB and all seven audiobook tracks. Use chapter assistance only if the automatic run exposes a coarse chapter/section correspondence problem; do not run a redundant assisted condition when automatic correspondence is usable.
 
 The fixed manual timing subset contains these four sentence starts:

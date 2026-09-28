@@ -134,8 +134,11 @@ not change chapter mapping, sentence alignment, or Storyteller output.
 The automatic route provides complete section correspondence and sentence
 timings for this source without chapter assistance. Interpolated sentences,
 unmatched headings, and the track-2 audio hole remain limitations for
-synchronization and require focused playback interpretation. All four starts
+synchronization. Focused manual inspection of the track-2 hole is pending: the
+context WAV `track2-loose-audio-1075.5s.wav` spans source-track
+1075.5–1125.9 seconds, with the reported hole at clip-relative
+17.56–23.36 seconds. It is diagnostic context, not an additional benchmark
+boundary. All four starts
 in the fixed, manually verified subset precede the heard boundary by approximately
-0.3, 0.3, 0.4, and 0.5 seconds, respectively. This small subset does not establish general boundary accuracy. No
-observed blocker requires promoting another ASR route, so native CTC remains
-the frozen alignment route for this source.
+0.3, 0.3, 0.4, and 0.5 seconds, respectively. This small subset does not establish general boundary accuracy. The material-blocker conclusion remains pending that listening observation;
+native CTC remains the frozen route under review.
