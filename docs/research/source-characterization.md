@@ -204,13 +204,15 @@ Observed at the coarsest useful level:
   within sections were not assessed. Characters per second per confirmed
   track: range 10.8–11.7, median 11.3 (`audiobook_report.txt`) —
   descriptive only, not evidence of correspondence.
-- Limits: no sentence alignment, no ASR; finer insert/omit/repeat
-  detection inside sections is deferred to the alignment pilot and evaluation (#13, #15).
+- Limits: source characterization did not perform sentence alignment or ASR;
+  finer within-section alignment behavior is reported separately in
+  [alignment validation](alignment-validation.md).
 
-## Benchmark candidates for #13
+## Source-derived benchmark candidates
 
-Candidates only — not frozen items, no scores or thresholds. Selected from
-the observed properties above; prefixes pin the block (extraction-drift
+These were candidate cases at characterization time, with no scores or
+thresholds. Later pathway-specific freezes are defined in the
+[research protocol](protocol.md). Prefixes pin the block (extraction-drift
 check, same convention as `src/lyrepub/inspection.py`).
 
 Representative:
