@@ -39,6 +39,10 @@ select = [
   "UP",  # pyupgrade
   "W",  # pycodestyle
 ]
+ignore = [
+  "S603",  # Ruff documents frequent false positives for subprocess argument checks.
+  "S607",  # Pixi/mise-managed executables are intentionally resolved through PATH.
+]
 
 [lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004"]
