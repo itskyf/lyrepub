@@ -2,13 +2,16 @@
 
 from pathlib import Path
 
+import numpy as np
 import pytest
 
+from lyrepub import segmentation
 from scripts.issue14_feasibility import normalize_slash_enumeration
 from scripts.issue14_synthesis import (
     frontend_identity,
     prepare_sentences,
     run_audio_cpp,
+    synthesize_sentences,
 )
 
 
@@ -69,11 +72,14 @@ def test_sentence_mapping_and_internal_chunks(
     audio = tmp_path / "audio"
     audio.mkdir()
     (tmp_path / "traces").mkdir()
-    chunk = mapped[0]["chunks"][0] | {"key": "target-chunk-00", "seed": 14}
+    chunk = mapped[0]["chunks"][0] | {
+        "key": "case=target,sentence=000,chunk=00",
+        "seed": 14,
+    }
 
     def fake_runtime(command: list[str]) -> tuple[str, str]:
         commands.append(command)
-        (audio / "target-chunk-00.wav").write_bytes(b"pcm")
+        (audio / "case=target,sentence=000,chunk=00.wav").write_bytes(b"pcm")
         return "log", ""
 
     monkeypatch.setattr("scripts.issue14_synthesis.run_tool", fake_runtime)
@@ -82,3 +88,77 @@ def test_sentence_mapping_and_internal_chunks(
     assert f"text_chunk_size={budget}" in commands[0]
     assert chunk["text_chunk_size_bytes"] == budget
     assert not any("g2p_dict=" in part for part in commands[0])
+
+    names = []
+
+    def package(_output: Path, name: str, _pcm: np.ndarray, _rate: int) -> dict:
+        names.append(name)
+        return {"audio": f"audio/{name}.wav"}
+
+    monkeypatch.setattr("scripts.issue14_synthesis.package_audio", package)
+    monkeypatch.setattr(
+        "scripts.issue14_synthesis.sf.read",
+        lambda *_args, **_kwargs: (np.zeros((50, 2), dtype=np.float32), 48000),
+    )
+    record = {"key": "target", "seed": 14, "sentences": [mapped[0]]}
+    synthesize_sentences(
+        tmp_path, tmp_path / "model", tmp_path / "voice", "image", record
+    )
+    assert record["sentences"][0]["chunks"][0]["key"] == (
+        "case=target,sentence=000,chunk=00"
+    )
+    assert names == ["case=target,sentence=000", "case=target"]
+
+
+def test_manual_normalization_preserves_authored_offsets() -> None:
+    source = "Trước. S…át Th.. át! Sau."
+    sentences = ["Trước.", "S…át Th.. át!", "Sau."]
+    manual = {"source_span": "S…át Th.. át!", "tts_text": "Sát Thát!"}
+    raw = prepare_sentences(source, source, sentences)
+    treated = prepare_sentences(source, source, sentences, manual)
+    for original, selected in zip(raw, treated, strict=True):
+        for field in ("source_text", "source_start", "source_end"):
+            assert original[field] == selected[field]
+        assert "normalized_parts" not in selected
+    assert treated[1]["tts_input"] == "Sát Thát!"
+    assert treated[1]["chunks"][0]["normalized_text"] == "sát thát."
+    with pytest.raises(ValueError, match="exactly one"):
+        prepare_sentences("Sau.", "Sau.", ["Sau."], manual)
+    with pytest.raises(ValueError, match="exactly one"):
+        prepare_sentences(source + source, source + source, sentences * 2, manual)
+
+
+def test_sat_uses_pinned_tokenizer_snapshot(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = {}
+
+    def snapshot(repo: str, **kwargs: object) -> str:
+        calls["download"] = (repo, kwargs)
+        return "pinned-tokenizer-snapshot"
+
+    def sat(name: str, **kwargs: object) -> object:
+        calls["sat"] = (name, kwargs)
+        return object()
+
+    monkeypatch.setattr(segmentation, "snapshot_download", snapshot)
+    monkeypatch.setattr(segmentation, "SaT", sat)
+    segmentation._sat.cache_clear()
+    try:
+        segmentation._sat()
+        repo, kwargs = calls["download"]
+        assert repo == "facebookAI/xlm-roberta-base"
+        assert kwargs["revision"] == "e73636d4f797dec63c3081bb6ed5c7b0bb3f2089"
+        assert set(kwargs["allow_patterns"]) == {
+            "config.json",
+            "tokenizer_config.json",
+            "tokenizer.json",
+            "sentencepiece.bpe.model",
+        }
+        assert calls["sat"] == (
+            segmentation.SAT_NAME,
+            {
+                "tokenizer_name_or_path": "pinned-tokenizer-snapshot",
+                "from_pretrained_kwargs": {"revision": segmentation.SAT_REVISION},
+            },
+        )
+    finally:
+        segmentation._sat.cache_clear()

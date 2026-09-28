@@ -28,7 +28,8 @@ Both hashes are verified before synthesis, with no default-voice fallback.
 
 ```text
 authored Block.text -> authored SaT sentence targets
- -> confirmed ordered slash-list disambiguation (TTS only, if applicable)
+ -> accepted ordered slash-list disambiguation (TTS only, if applicable)
+ -> explicitly reviewed manual cry normalization (affected source span only)
  -> VieNeu/SEA-G2P Vietnamese normalization
  -> upstream safe normalized-text chunks -> upstream SEA-G2P phonemes
  -> one audio.cpp request per prepared chunk -> upstream PCM join per sentence
@@ -52,9 +53,16 @@ authored Block.text -> authored SaT sentence targets
   adds no Vietnamese TN layer. NeMo and its OpenFST dependency/checks are removed.
 - Existing SaT `sat-3l-sm` at `137da054051ad9f1eac42025f758db4ac9f22535`
   supplies outer sentence targets on authored text. Forward source offsets verify
-  exact coverage with only whitespace gaps. Its existing default XLM-R tokenizer
-  remains unpinned; this pre-existing reproducibility limitation must be reviewed
-  before the reported configuration freeze.
+  exact coverage with only whitespace gaps. XLM-R tokenizer
+  `facebookAI/xlm-roberta-base` is now pinned to snapshot
+  `e73636d4f797dec63c3081bb6ed5c7b0bb3f2089`, using Hub `snapshot_download`
+  with the immutable revision and only `config.json`, `tokenizer_config.json`,
+  `tokenizer.json`, `sentencepiece.bpe.model`. Pass the returned local snapshot
+  to SaT's public `tokenizer_name_or_path`; no wtpsplit patch or custom loader.
+  Actual rerun on all nine cases confirmed **118/118 authored sentence text,
+  start and end triples identical** to the previous records. Tokenizer pinning
+  did not trigger audio synthesis. Runtime metadata records the revision, not
+  a machine-local cache path.
 - audio.cpp `vieneu_v3_turbo`, explicit **CUDA**, revision
   `955c8725c611d511774e6be132aff6609163b2d2`. The supplied image has this
   revision but a different image ID from the preceding run. Actual current ID:
@@ -92,15 +100,15 @@ authored Block.text -> authored SaT sentence targets
 Source/model/voice/image locations are runtime arguments, not encoded host paths.
 `cases.json` extends the previous block record with nested `sentences` and
 `raw_frontend`: exact authored offsets/text, TTS input/interventions, normalized
-parts and final text chunks, gap classifications, phonemes, seed, per-request
+text chunks from public upstream outputs, gap classifications, phonemes, seed, per-request
 commands/logs, PCM sample counts/rate, sentence audio and final Opus intervals.
 There are no invented XHTML fragment IDs. Preprocessing
 and synthesis exceptions have separate statuses. Normal tests require no inference.
 
 ## Human findings from the preceding revision
 
-These are the latest supplied listening observations, not automatic quality
-scores or acceptance of every newly generated file.
+These earlier listening observations remain historical evidence, not automatic
+quality scores or acceptance of every newly generated file.
 
 | Case | Human finding | Previous Quỳnh Anh Ogg seconds |
 | --- | --- | ---: |
@@ -130,24 +138,61 @@ before sentence slices, retaining source offsets. Dates, fractions, singleton
 and ambiguous non-sequential markers remain unchanged. Authored XHTML is unchanged.
 
 Selected input yields `một, văn thù sư lỵ.`, `hai, quan thế âm.`, etc.
-The comma realization remains provisional pending listening. No pause parameter
-is tuned. Tests retain positive lists and fraction/date/ambiguous negatives.
+Human listening now accepts the comma realization: ordered-list separation is
+correct. No pause parameter is tuned. Tests retain positive lists and
+fraction/date/ambiguous negatives.
 
-### Rejected cry treatment and expressive limitation
+### Cry normalization failure, manual correction and expressive limitation
 
-The complete paragraph and nearby context repeat the crowd cry "Sát Thát!".
-Authored `S…át Th.. át!` depicts a later stronger/extended cry. Human review
-confirmed raw lexical content is correct, despite letter-name fragments in the
-intermediate phonemes. Those fragments alone are not proof of audible failure.
+The authored context repeats "Sát Thát!" and establishes the lexical form.
+Under current SEA-G2P 0.10.0, the intra-word ellipsis/multi-dot notation is folded
+before standalone-letter handling. The raw `S…át Th.. át!` consequently produces
+an incorrect audible realization such as letter names (`ét át th. át!` in the
+normalized trace). Human review classifies this as a **frontend normalization
+failure**, separately from the inability to express the stronger/extended shout.
 
-The attempted TTS-only replacement with `Sát Thát!` caused omission, so it is
-rejected. Historical raw/treated evidence remains in
-`data/issue-14-feasibility-review/`; the variant JSON, CLI option, and helper
-have been removed. The selected pathway uses authored raw text.
+Apply the explicitly reviewed, **manual TTS-only normalization** to exactly one
+observed span in the s17-b135 feasibility case:
 
-This route has no documented per-span shout/loudness control. Its inability to
-express the stronger later cry is an **expressive-prosody limitation**, not a
-pronunciation failure. No emotion tags, SSML, gain, or volume processing is added.
+```text
+S…át Th.. át! -> Sát Thát!
+```
+
+The source-case fixture records the correction; reusable processing has no
+book-specific pronunciation rule. Authored source/XHTML, sentence text and source
+offsets are unchanged. Locate each sentence on the authored source first, then
+apply the correction within its TTS input before upstream normalization. Fail if
+the observed span is missing, repeated or crosses sentence targets. No generic
+ellipsis regex, vendor patch, custom phonemes, emotion tags or gain processing.
+
+This changes sentence 001, authored offsets `[34, 95)`. The exact TTS input is:
+`Dường như cả Thăng Long: Sát Thát! Sát Thát! Sát Thát!...`
+Its upstream normalized chunk is:
+`dường như cả thăng long, sát thát! sát thát! sát thát!`
+Final sentence Opus duration is **3.926 s**; recombined case is **7.916 s**.
+Generation and lexical trace are not human pronunciation acceptance.
+
+Raw failed sentence audio and its trace are retained in the fresh output with
+`input=raw` names. The historical replacement that caused omission under the
+older pathway remains rejected evidence in `data/issue-14-feasibility-review/`;
+no generic variant infrastructure is restored for this new reviewed correction.
+
+Even if the new lexical pronunciation is accepted, this selected route has no
+documented per-span shout/loudness control. The stronger/extended cry indicated
+by typography remains an **expressive-prosody limitation**.
+
+### Accepted human findings after semantic chunking
+
+| Reviewed target | Qualitative human finding |
+| --- | --- |
+| `s5-b26`, sentence 002 | 1256 is correct; previous intra-number stutter resolved. |
+| `s15-b17`, sentence 001 | 1284 and the later internal boundary are correct. |
+| `s2-b70` | Ordered-list separation correct; narrow slash-list -> comma treatment accepted. |
+| `s5-b9` | Long-form prosody under sentence synthesis acceptable. |
+
+These are listening observations, not scores. Their synthesis inputs, chunks,
+phonemes and gaps remain unchanged; byte-identical accepted audio is reused.
+They are removed from the pending-listening gate.
 
 ## Prior stutter diagnosis and reviewed synthesis-unit revision
 
@@ -181,7 +226,8 @@ pinned upstream VieNeu implementation, rather than a local numeric-span rule.
 The nine-case frontend comparison retains exact previous normalized text/phonemes,
 raw SEA frontend traces, and selected sentence/chunk traces in
 `data/issue-14-sea010-review/frontend-comparison.json`. Raw and treated list inputs
-are distinct; the rejected cry replacement is not reapplied. The comparison
+are distinct. The previous rejected cry replacement belongs to older pathway
+evidence; the current reviewed manual correction is recorded above. The comparison
 changes both the frontend and the outer request boundaries; lowercasing alone
 is not evidence of an intelligibility failure.
 
@@ -196,8 +242,9 @@ Both diagnosed years are now indivisible within prepared requests:
 
 The number phrase is no longer split `hai | trăm` or `nghìn | hai` by the
 200-byte native fallback. This establishes segmentation correction, not that
-all audible stutter is gone. Remaining stutter without such a boundary would be
-acoustic/model evidence; do not add another preprocessing fix without review.
+all audible stutter is gone by itself. Subsequent human listening confirmed
+the two reviewed number phrases/boundaries are correct and the prior intra-number
+stutter is resolved.
 
 Three normalized outer sentence targets exceed the upstream default budget:
 
@@ -215,18 +262,18 @@ requests; none of those outer sentences requires an internal split.
 Material normalization changes requiring review include `tám mươi tư` -> `tám mươi
 bốn` in 1284, numeric expression realizations, foreign-name punctuation/forms,
 and ellipsis handling. Exact strings for every case, not abbreviated excerpts,
-are retained in the comparison artifact. In particular the raw cry now includes
-`ét át th. át!`; do not assume the previous raw lexical judgement transfers to
-new audio, or introduce a replacement treatment.
+are retained in the comparison artifact. The raw cry failure and its explicitly
+reviewed manual correction are distinguished above.
 
 ### Feasibility rerun results
 
 All nine cases completed preprocessing, synthesis and Opus packaging: **118
-sentence targets / 121 prepared requests**, with no retained stage failures.
+sentence targets / 121 prepared requests**, with no runtime exceptions.
+The raw cry normalization failure is retained as human-reviewed evidence.
 Every recorded request uses its actual phoneme byte length as the runtime budget;
 all prepared requests are single phoneme paragraphs. No custom splitter diagnostic
-or ASR was required. Four focused frontend tests plus six existing generic Media
-Overlay tests passed; `hk check --pr` passed. These are deterministic/structural
+or ASR was required. Six focused frontend tests plus six existing generic Media
+Overlay tests passed in the current revision; `hk check --pr` passed. These are deterministic/structural
 checks, not listener acceptance of the regenerated audio.
 
 | Case | Sentences | Synthesis requests | Full listening Opus seconds |
@@ -255,8 +302,9 @@ Keep three levels distinct:
 2. one or more upstream VieNeu text chunks/phoneme requests per sentence;
 3. sentence target and its final packaged-audio timing range.
 
-Issue #16 owns publication-facing sentence-addressable XHTML targeting/markup
-and generic Media Overlays. It must preserve authored text, inline semantics,
+Issue #16 is reopened to own publication-facing sentence-addressable XHTML
+targeting/markup after #14 freezes the final sentence/timing contract.
+PR #33 already provides generic timing-to-Media-Overlay publication. It must preserve authored text, inline semantics,
 reading order, and visible authored heading coverage. Issue #14 owns the audio
 and reproducible sentence timing requirement, not a second publication layer.
 The existing #16 `Timing` contract (`text_href`, `audio_href`, `clip_begin`,
@@ -268,10 +316,16 @@ Each sentence is synthesized independently and owns one final packaged file.
 Its eventual `Timing` interval is `0` to that file's measured duration, with
 PCM sample count/rate retained for verification. Internal TTS boundaries do not
 become Media Overlay targets. No ASR/forced alignment is needed for this arrangement.
-**Remaining publication integration:** real sentence-addressable XHTML fragments
-are still required before constructing `text_href` values and invoking the generic
-publisher. This PR does not invent fragment IDs or duplicate the publication layer.
-Frontend, synthesis-unit handling and the complete timing path still await review.
+Issue #14 stops at reviewed sentence source identities/offsets, TTS preparation,
+synthesis units and reproducible final Opus sentence intervals. Missing XHTML
+fragments are **Issue #16 ownership**, not work added to PR #32. It will map the
+frozen sentence/timing records to addressable `text_href` values later. No spans,
+IDs, targeting changes or generic publisher changes are made here.
+
+The tokenizer, runtime, frontend and synthesis-unit mechanics are reproducibly
+specified, and the accepted components are ready for freeze. Full configuration
+freeze still awaits the remaining foreign/date, mixed-name, boundary and corrected
+cry listening findings. This pass does not freeze them or run reported evaluation.
 
 ## Diagnostic EPUB and validation
 
@@ -297,43 +351,61 @@ No new reader retest is needed to revisit the accepted human granularity decisio
 
 Find the main worktree with `git worktree list`; read its source EPUB directly.
 Set `SOURCE_EPUB`, `MODEL_GGUF`, `VOICE_DIR` (verified Quỳnh Anh assets), and
-`AUDIOCPP_IMAGE` as runtime inputs. Use a fresh output directory when settings change.
+`AUDIOCPP_IMAGE` as runtime inputs. Full reproduction uses an unused output
+directory, separately from the review artifacts:
 
 ```sh
-OUT=data/issue-14-sea010-review
+OUT=data/issue-14-final-frontend-reproduction
 pixi run -e dev python -m scripts.issue14_feasibility prepare --output "$OUT" --source-epub "$SOURCE_EPUB"
 pixi run -e dev python -m scripts.issue14_feasibility synthesize --output "$OUT" --model "$MODEL_GGUF" --voice-dir "$VOICE_DIR" --image "$AUDIOCPP_IMAGE"
 pixi run -e dev python -m pytest tests/test_issue14_feasibility.py tests/test_epub_media_overlays.py -q
 hk check --pr
 ```
 
-The obsolete paragraph publisher and its tests are removed; the historical EPUB
-and validator reports remain under `data/issue-14-quynh-anh-review/`. No EPUB is
-regenerated by this frontend pass, so the previous EPUBCheck 5.4.0/Ace 1.4.6 results
-apply only to that historical artifact. Generic publication code/tests come from
-PR #33, without duplicate markup or a second Media Overlay implementation.
+For this incremental pass, **117 unchanged sentence audio files are copied
+byte-for-byte** from `data/issue-14-sea010-review/` into the fresh directory;
+only s17-b135 sentence 001 is synthesized again with the existing helpers.
+Rejoin its case with the unchanged sentence 000/002 PCM and repackage the case.
+No other model inference or codec re-encoding is required. Source text/offset
+triples and unchanged chunks/phonemes/gaps are checked before synthesis; an
+observed segmentation difference stops the pass and is reported before audio work.
+Runtime metadata retains the 118-target identity result and manual correction.
 
-Gitignored new listening material under `data/issue-14-sea010-review/audio/`:
+Per-case/sentence/chunk audio and log names use comma-separated `key=value`
+components, with three-digit sentence and two-digit chunk indexes. Aggregate
+`cases.json`, `runtime.json`, `source.json`, `frontend-comparison.json` names
+remain unchanged. Reused request commands/logs retain their original execution
+output names; record audio paths refer to the fresh, renamed byte-identical files.
+This is one-time artifact staging, without migration compatibility or a layout
+abstraction. The unused private normalization trace field is removed explicitly;
+public normalized chunks and phonemes remain the frontend evidence.
 
-- `s5-b26-sentence-002.opus`: 1256 pronunciation and absence/persistence of stutter.
-- `s15-b17-sentence-001.opus`: 1284 and its later internal connective boundary.
-- `s2-b70.opus`: selected sequential-list comma separation.
-- `s17-b135.opus`: raw punctuation/ellipsis and expressive-prosody limitation.
-- `s12-b30-sentence-000.opus`, `s12-b30-sentence-002.opus`,
-  `s12-b30-sentence-004.opus`: date range and French/foreign names.
-- `s18-b35-sentence-005.opus`: changed hyphen/parenthesis realization of mixed
-  names; authored transliteration plus original names remain source behavior.
-- `s5-b9.opus`: full long-block prosody with sentence requests.
-- `s10-b42-sentence-023.opus`, `s12-b68-sentence-016.opus`: the other two
-  sentence targets now containing internal chunks. Review their new boundaries;
-  the previously accepted ordinary text is not relabeled a TTS failure.
+Pending listening paths under `data/issue-14-final-frontend-review/`:
 
-All exact normalized outputs, phonemes, internal chunks, PCM/final-media intervals,
-commands and logs are in `cases.json`, `frontend-comparison.json`, `runtime.json`,
-`source.json`, and `traces/*.log`. Sentence indexes are zero-based logical targets,
-not XHTML IDs. Listen only for the changed/questionable behavior identified above;
-no subjective score or blanket acceptance is inferred from successful generation.
+- `audio/case=s12-b30,sentence=000.opus`: year range/foreign-name normalization.
+- `audio/case=s12-b30,sentence=002.opus`: Koubilay and surrounding foreign text.
+- `audio/case=s12-b30,sentence=004.opus`: French title/name pronunciation.
+- `audio/case=s18-b35,sentence=005.opus`: authored transliteration plus original
+  forms remain source behavior; listen to the changed frontend realization.
+- `audio/case=s10-b42,sentence=023.opus`: internal synthesis boundary.
+- `audio/case=s12-b68,sentence=016.opus`: internal synthesis boundary.
+- `audio/case=s17-b135,sentence=001.opus`: corrected lexical cry; stronger shout
+  remains unsupported even if lexical pronunciation is accepted.
 
-Stop for human review before freezing frontend, synthesis units, runtime and the
-complete publication timing path. Issue #14 stays open until configuration/timing
-freeze and reported evaluation are complete. No reported run has started.
+Raw failure: `audio/case=s17-b135,sentence=001,input=raw.opus`, with matching raw
+PCM/log evidence. Optional full corrected case: `audio/case=s17-b135.opus`.
+Already accepted 1256, 1284, list separation and full long-block audio are not
+pending listening; their synthesis inputs/audio did not change.
+
+Exact normalized outputs, phonemes, requests and final timings are retained in
+`cases.json` and `frontend-comparison.json`; actual pins/settings are in
+`runtime.json`. Sentence indexes identify logical source targets, not XHTML IDs.
+No subjective score or acceptance is inferred from successful generation.
+
+Docker bake and validator-image work are retained. No new EPUB, EPUBCheck, Ace,
+reader test, system application/package change or Issue #16 implementation is
+required in this pass. Historical validator results apply only to the unchanged
+historical diagnostic EPUB.
+
+Stop for human review. Issue #14 remains open until configuration/timing freeze
+and reported evaluation complete; no reported run has started.

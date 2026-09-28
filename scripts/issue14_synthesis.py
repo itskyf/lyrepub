@@ -10,12 +10,17 @@ import numpy as np
 import soundfile as sf
 from vieneu_utils.core_utils import gaps_to_silence, join_audio_chunks
 from vieneu_utils.phonemize_text import (
-    _normalized_sentences_by_para,
     normalize_to_chunks_v3_with_gaps,
     phonemize_text_with_emotions,
 )
 
-from lyrepub.segmentation import SAT_NAME, SAT_REVISION, segment_sentences
+from lyrepub.segmentation import (
+    SAT_NAME,
+    SAT_REVISION,
+    TOKENIZER_NAME,
+    TOKENIZER_REVISION,
+    segment_sentences,
+)
 from scripts.issue14_feasibility import (
     load_records,
     normalize_slash_enumeration,
@@ -74,11 +79,22 @@ def synthesize(
                 if text_input != record["source"]["text"]
                 else []
             )
-            record["tts_input"] = text_input
+            manual = record.get("manual_normalization")
+            if manual:
+                record["interventions"].append(
+                    f"manual TTS normalization: {manual['source_span']} "
+                    f"-> {manual['tts_text']}"
+                )
+            record["tts_input"] = (
+                text_input.replace(manual["source_span"], manual["tts_text"])
+                if manual
+                else text_input
+            )
             record["sentences"] = prepare_sentences(
                 record["source"]["text"],
                 text_input,
                 segment_sentences(record["source"]["text"]),
+                manual,
             )
             record["raw_frontend"] = prepare_sentences(
                 record["source"]["text"],
@@ -105,13 +121,28 @@ def synthesize(
         LOGGER.info("%s: %s", record["key"], record["status"])
 
 
-def prepare_sentences(source: str, text_input: str, sentences: list[str]) -> list[dict]:
-    """Map authored sentences to upstream normalized synthesis chunks without loss."""
+def prepare_sentences(
+    source: str,
+    text_input: str,
+    sentences: list[str],
+    manual_normalization: dict[str, str] | None = None,
+) -> list[dict]:
+    """Map authored sentences to upstream normalized synthesis chunks without loss.
+
+    Apply explicit manual TTS normalization after locating authored offsets.
+    """
     if len(source) != len(text_input):
         message = "enumeration treatment must preserve source offsets"
         raise ValueError(message)
+    if (
+        manual_normalization
+        and text_input.count(manual_normalization["source_span"]) != 1
+    ):
+        message = "manual normalization requires exactly one observed source span"
+        raise ValueError(message)
     result = []
     cursor = 0
+    manual_applied = False
     for index, sentence in enumerate(sentences):
         start = source.find(sentence, cursor)
         if start < 0 or source[cursor:start].strip():
@@ -119,6 +150,11 @@ def prepare_sentences(source: str, text_input: str, sentences: list[str]) -> lis
             raise ValueError(message)
         end = start + len(sentence)
         prepared = text_input[start:end]
+        if manual_normalization and manual_normalization["source_span"] in prepared:
+            prepared = prepared.replace(
+                manual_normalization["source_span"], manual_normalization["tts_text"]
+            )
+            manual_applied = True
         chunks, gaps = normalize_to_chunks_v3_with_gaps(prepared)
         if not chunks or any(not chunk.strip() for chunk in chunks):
             message = "frontend produced empty synthesis input"
@@ -130,7 +166,6 @@ def prepare_sentences(source: str, text_input: str, sentences: list[str]) -> lis
                 "source_end": end,
                 "source_text": sentence,
                 "tts_input": prepared,
-                "normalized_parts": _normalized_sentences_by_para(prepared),
                 "gaps": gaps,
                 "chunks": [
                     {
@@ -142,6 +177,9 @@ def prepare_sentences(source: str, text_input: str, sentences: list[str]) -> lis
             }
         )
         cursor = end
+    if manual_normalization and not manual_applied:
+        message = "observed manual-normalization span crosses sentence targets"
+        raise ValueError(message)
     if source[cursor:].strip() or not result:
         message = "sentence segmentation left authored text uncovered"
         raise ValueError(message)
@@ -215,14 +253,18 @@ def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
         "voice": "Quỳnh Anh",
         "voice_id": "quynh_anh",
         "voice_package_path": "gguf/voices/quynh_anh",
-        "tts_input_treatment": "ordered slash enumeration: marker slash -> comma",
+        "tts_input_treatment": (
+            "ordered slash enumeration: marker slash -> comma; "
+            "explicit source-case manual normalizations recorded in cases.json"
+        ),
         "voice_assets_sha256": {path.name: sha256(path) for path in required[1:]},
         "frontend": frontend_identity(),
         "sentence_segmentation": {
             "checkpoint": SAT_NAME,
             "revision": SAT_REVISION,
             "wtpsplit_version": importlib.metadata.version("wtpsplit"),
-            "tokenizer": "facebookAI/xlm-roberta-base (upstream unpinned default)",
+            "tokenizer": TOKENIZER_NAME,
+            "tokenizer_revision": TOKENIZER_REVISION,
         },
         "backend": "cuda",
         "seed_per_block": "14 + source spine index * 1000 + block index",
@@ -353,9 +395,9 @@ def synthesize_sentences(
     rate = None
     for sentence in record["sentences"]:
         chunks_pcm = []
-        name = f"{record['key']}-sentence-{sentence['index']:03d}"
+        name = f"case={record['key']},sentence={sentence['index']:03d}"
         for index, chunk in enumerate(sentence["chunks"]):
-            chunk["key"] = f"{name}-chunk-{index:02d}"
+            chunk["key"] = f"{name},chunk={index:02d}"
             chunk["seed"] = record["seed"]
             run_audio_cpp(output, model, voice_dir, image, chunk)
             pcm, chunk_rate = sf.read(
@@ -375,5 +417,5 @@ def synthesize_sentences(
     pcm = join_audio_chunks(
         sentences_pcm, rate, silence_ps=[0.5] * (len(sentences_pcm) - 1)
     )
-    record.update(package_audio(output, record["key"], pcm, rate))
+    record.update(package_audio(output, f"case={record['key']}", pcm, rate))
     record["status"] = "ok"

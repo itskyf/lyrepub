@@ -37,6 +37,9 @@ PREFIXES = {
     (5, 9): "Phủ Chiêu Quốc không phải là phủ lớn nhất",
     (17, 135): 'Tiếng "Sát Thát!',
 }
+MANUAL_NORMALIZATIONS = {
+    (17, 135): {"source_span": "S…át Th.. át!", "tts_text": "Sát Thát!"},
+}
 LOGGER = logging.getLogger(__name__)
 
 
@@ -132,6 +135,10 @@ def prepare(output: Path, source: Path) -> None:
                 },
             }
         )
+    for record in records:
+        target = (record["source"]["spine_index"], record["source"]["block_index"])
+        if target in MANUAL_NORMALIZATIONS:
+            record["manual_normalization"] = MANUAL_NORMALIZATIONS[target]
     output.mkdir(parents=True, exist_ok=True)
     save_records(output, records)
     (output / "source.json").write_text(
