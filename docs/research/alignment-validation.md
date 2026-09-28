@@ -99,6 +99,17 @@ The table below keeps raw Storyteller timestamps separately from the approximate
 The repository owner manually confirmed all four clip-relative onsets at the frozen 0.1-second listening precision; ASR and waveform suggestions only helped locate the regions.
 This listening was evaluation assistance; it did not change chapter mapping, sentence alignment, or Storyteller output.
 
+### Publication validation note
+
+The generated `data/issue-15/evaluation/aligned.epub` could not be opened in Readest during focused manual inspection and does not pass EPUBCheck 5.4.0.
+The original EPUB 2.0.1 reports 8 errors and 1 warning, while the Storyteller-upgraded EPUB 3.3 output reports 7 errors and 1 warning.
+
+Most aligned-output validation defects are inherited from the source EPUB: the unresolved `unique-identifier="bookId"`, invalid custom `section` attributes, invalid `note:` links, and references to the missing `EBGaramond-Regular.woff` and `book-style-3.css` resources.
+The aligned EPUB additionally reports empty XHTML `<title>` elements under EPUB 3.3 validation; the two validator reports alone do not establish whether Storyteller introduced those empty titles or whether the EPUB 3.3 validation profile newly exposes an existing source condition.
+
+These publication-conformance findings do not alter the frozen CTC alignment measurements or timing evaluation.
+Issue #15 therefore records them as limitations without repairing the experimental artifact; publication repair belongs to the final publication work where EPUBCheck and Ace conformance are required.
+
 ## Discussion
 
 The automatic route mapped all nine narratable spine documents to the expected tracks without chapter assistance.
