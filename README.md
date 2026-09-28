@@ -7,7 +7,7 @@ LyrePub investigates two audio pathways:
 1. **TTS synthesis** — generate narration from EPUB text using existing Vietnamese-capable TTS systems.
 2. **Audiobook alignment** — align an existing long-form audiobook with the corresponding EPUB content.
 
-Both pathways converge on the same synchronization and publication pipeline. The project uses existing models and tools rather than training or fine-tuning speech models.
+Both pathways converge on EPUB Media Overlays and final publication validation while retaining pathway-specific processing where appropriate. The project uses existing models and tools rather than training or fine-tuning speech models.
 
 ## Pipeline
 

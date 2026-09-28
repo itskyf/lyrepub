@@ -33,17 +33,9 @@ Other Vietnamese ASR adaptations found during the survey remain alternatives onl
 
 ## Source-material implications
 
-The selected audiobook already contains the alignment conditions that matter for feasibility:
-
-- audiobook tracks and EPUB spine documents are not one-to-one;
-- track 1 spans multiple spine documents;
-- the audiobook contains an opening announcement absent from the EPUB;
-- some headings or publication text may be verbalized differently;
-- navigational coverage is not equivalent to synchronization coverage.
-
-These observations are recorded in [source characterization](source-characterization.md) and should not be duplicated as new benchmark categories. They informed the #15 feasibility check and reported evaluation; observed behavior and limitations are recorded in [alignment validation](alignment-validation.md).
-
-The selected CTC route uses EPUB reference text explicitly, which is permitted by the protocol for forced alignment. No transcription-driven escalation route was needed.
+Source-specific alignment conditions are documented in [source characterization](source-characterization.md), and their observed effects are reported in [alignment validation](alignment-validation.md).
+They are not repeated here as additional benchmark categories or route-selection criteria.
+The selected CTC route explicitly uses EPUB reference text, as permitted by the protocol for forced alignment, and no transcription-driven escalation route was needed.
 
 ## Survey conclusion
 
