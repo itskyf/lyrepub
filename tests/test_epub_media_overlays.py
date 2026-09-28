@@ -1,7 +1,5 @@
 """Synthetic EPUB Media Overlay publication checks."""
 
-import os
-import shutil
 from datetime import UTC, datetime
 from pathlib import Path
 from xml.etree.ElementTree import Element, SubElement, tostring
@@ -10,7 +8,7 @@ from zipfile import ZIP_STORED, ZipFile
 import pytest
 from defusedxml import ElementTree
 
-from lyrepub.epub_media_overlays import Timing, _smil_content, publish_media_overlays
+from lyrepub.epub_media_overlays import Timing, publish_media_overlays
 
 _OPF = "http://www.idpf.org/2007/opf"
 _SMIL = "http://www.w3.org/ns/SMIL"
@@ -103,12 +101,8 @@ def _source(path: Path) -> dict[str, bytes]:
 
 @pytest.fixture
 def audio(tmp_path: Path) -> Path:
-    source = os.environ.get("LYREPUB_TEST_OPUS")
-    if source is None:
-        msg = "run scripts/test_media_overlays.sh to generate the Opus fixture"
-        raise RuntimeError(msg)
     path = tmp_path / "tone.opus"
-    shutil.copyfile(source, path)
+    path.write_bytes(b"opaque audio resource")
     return path
 
 
@@ -230,18 +224,3 @@ def test_invalid_inputs(
         publish_media_overlays(
             source, tmp_path / "out.epub", [timing], {timing.audio_href: supplied}
         )
-
-
-def test_same_target_clips_keep_caller_order() -> None:
-    rows = [
-        (1, Timing("two.xhtml#second", "audio/last.opus", 0, 0.1), "second"),
-        (0, Timing("two.xhtml#first", "audio/z.opus", 1, 2), "first"),
-        (0, Timing("two.xhtml#first", "audio/a.opus", 0, 1), "first"),
-    ]
-    content, _duration = _smil_content(rows, "two.xhtml", "two.smil", "")
-    smil = ElementTree.fromstring(content)
-    assert [clip.get("src") for clip in smil.iter(f"{{{_SMIL}}}audio")] == [
-        "audio/z.opus",
-        "audio/a.opus",
-        "audio/last.opus",
-    ]

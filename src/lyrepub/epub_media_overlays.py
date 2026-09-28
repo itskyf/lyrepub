@@ -8,11 +8,9 @@ from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
-from xml.dom import minidom
 from xml.etree.ElementTree import Element, SubElement, tostring
 from zipfile import ZipFile
 
-import defusedxml.minidom
 from defusedxml import ElementTree
 from fast_ebook import epub
 
@@ -132,17 +130,13 @@ def _group_timings(
 
 
 def _add_audio(
-    package: minidom.Document,
-    manifest: minidom.Element,
+    manifest: Element,
     audio_files: dict[str, Path],
     opf_dir: str,
     existing_paths: set[str],
 ) -> dict[str, Path]:
     additions: dict[str, Path] = {}
-    used_ids = {
-        item.getAttribute("id")
-        for item in manifest.getElementsByTagNameNS(_OPF, "item")
-    }
+    used_ids = {item.get("id") for item in manifest.findall(f"{{{_OPF}}}item")}
     for index, (href, path) in enumerate(sorted(audio_files.items())):
         full_path = _resource_path(href, opf_dir)
         if (
@@ -158,14 +152,11 @@ def _add_audio(
             msg = f"manifest ID already exists: {audio_id}"
             raise ValueError(msg)
         used_ids.add(audio_id)
-        item = package.createElementNS(_OPF, "item")
-        for key, value in (
-            ("id", audio_id),
-            ("href", href),
-            ("media-type", media_type),
-        ):
-            item.setAttribute(key, value)
-        manifest.appendChild(item)
+        SubElement(
+            manifest,
+            f"{{{_OPF}}}item",
+            {"id": audio_id, "href": href, "media-type": media_type},
+        )
         additions[full_path] = path
     return additions
 
@@ -198,18 +189,15 @@ def _smil_content(
 
 
 def _add_overlays(
-    package: minidom.Document,
+    package: Element,
     spine_items: dict[str, tuple[int, str, dict[str, int]]],
     grouped: dict[str, list[tuple[int, Timing, str]]],
     opf_dir: str,
     reserved_paths: set[str],
 ) -> dict[str, bytes]:
-    metadata = package.getElementsByTagNameNS(_OPF, "metadata")[0]
-    manifest = package.getElementsByTagNameNS(_OPF, "manifest")[0]
-    items = {
-        item.getAttribute("id"): item
-        for item in manifest.getElementsByTagNameNS(_OPF, "item")
-    }
+    metadata = package.find(f"{{{_OPF}}}metadata")
+    manifest = package.find(f"{{{_OPF}}}manifest")
+    items = {item.get("id"): item for item in manifest.findall(f"{{{_OPF}}}item")}
     used_ids = set(items)
     additions: dict[str, bytes] = {}
     total_duration = Decimal(0)
@@ -233,43 +221,34 @@ def _add_overlays(
         content, duration = _smil_content(grouped[href], xhtml_path, smil_path, opf_dir)
         total_duration += duration
         additions[smil_path] = content
-        item = package.createElementNS(_OPF, "item")
-        for key, value in (
-            ("id", smil_id),
-            ("href", smil_href),
-            ("media-type", "application/smil+xml"),
-        ):
-            item.setAttribute(key, value)
-        manifest.appendChild(item)
-        items[item_id].setAttribute("media-overlay", smil_id)
-        meta = package.createElementNS(_OPF, "meta")
-        meta.setAttribute("property", "media:duration")
-        meta.setAttribute("refines", f"#{smil_id}")
-        meta.appendChild(package.createTextNode(_clock(duration)))
-        metadata.appendChild(meta)
-    meta = package.createElementNS(_OPF, "meta")
-    meta.setAttribute("property", "media:duration")
-    meta.appendChild(package.createTextNode(_clock(total_duration)))
-    metadata.appendChild(meta)
+        SubElement(
+            manifest,
+            f"{{{_OPF}}}item",
+            {"id": smil_id, "href": smil_href, "media-type": "application/smil+xml"},
+        )
+        items[item_id].set("media-overlay", smil_id)
+        SubElement(
+            metadata,
+            f"{{{_OPF}}}meta",
+            {"property": "media:duration", "refines": f"#{smil_id}"},
+        ).text = _clock(duration)
+    SubElement(
+        metadata, f"{{{_OPF}}}meta", {"property": "media:duration"}
+    ).text = _clock(total_duration)
     return additions
 
 
-def _update_modified(package: minidom.Document) -> None:
-    metadata = package.getElementsByTagNameNS(_OPF, "metadata")[0]
+def _update_modified(package: Element) -> None:
+    metadata = package.find(f"{{{_OPF}}}metadata")
     modified = [
         meta
-        for meta in metadata.getElementsByTagNameNS(_OPF, "meta")
-        if meta.getAttribute("property") == "dcterms:modified"
-        and not meta.hasAttribute("refines")
+        for meta in metadata.findall(f"{{{_OPF}}}meta")
+        if meta.get("property") == "dcterms:modified" and "refines" not in meta.attrib
     ]
     if len(modified) != 1:
         msg = "EPUB must have exactly one unrefined dcterms:modified value"
         raise ValueError(msg)
-    timestamp = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
-    if modified[0].firstChild is None:
-        modified[0].appendChild(package.createTextNode(timestamp))
-    else:
-        modified[0].firstChild.nodeValue = timestamp
+    modified[0].text = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 def publish_media_overlays(
@@ -299,21 +278,18 @@ def publish_media_overlays(
             raise ValueError(msg)
         opf_path = rootfile.attrib["full-path"]
         opf_dir = posixpath.dirname(opf_path)
-        package = defusedxml.minidom.parseString(archive.read(opf_path))
-        manifest = package.getElementsByTagNameNS(_OPF, "manifest")[0]
-        items = {
-            item.getAttribute("id"): item
-            for item in manifest.getElementsByTagNameNS(_OPF, "item")
-        }
-        if any(item.hasAttribute("media-overlay") for item in items.values()):
+        package = ElementTree.fromstring(archive.read(opf_path))
+        manifest = package.find(f"{{{_OPF}}}manifest")
+        items = {item.get("id"): item for item in manifest.findall(f"{{{_OPF}}}item")}
+        if any("media-overlay" in item.attrib for item in items.values()):
             msg = "source EPUB already has Media Overlays"
             raise ValueError(msg)
         spine_items = _spine_items(book)
         grouped = _group_timings(timings, audio_files, spine_items)
         existing_paths = set(archive.namelist()) | {
-            item.getAttribute("href") for item in items.values()
+            item.get("href") for item in items.values()
         }
-        additions = _add_audio(package, manifest, audio_files, opf_dir, existing_paths)
+        additions = _add_audio(manifest, audio_files, opf_dir, existing_paths)
         additions.update(
             _add_overlays(
                 package,
@@ -324,7 +300,7 @@ def publish_media_overlays(
             )
         )
         _update_modified(package)
-        additions[opf_path] = package.toxml(encoding="utf-8")
+        additions[opf_path] = tostring(package, encoding="utf-8", xml_declaration=True)
 
         with ZipFile(output, "w") as result:
             for info in archive.infolist():
