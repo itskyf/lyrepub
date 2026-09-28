@@ -16,10 +16,28 @@ from scripts.issue14_feasibility import (
     SMIL,
     XHTML,
     key,
+    normalize_slash_enumeration,
     publish,
     source_paragraph,
     xhtml_document,
 )
+
+
+def test_slash_enumeration_treatment() -> None:
+    for source, expected in (
+        (
+            "Danh sách: 1/ Văn Thù. 2/ Quan Thế âm. 3/ Di Lặc.",
+            "Danh sách: 1, Văn Thù. 2, Quan Thế âm. 3, Di Lặc.",
+        ),
+        ("1/ Một mục\n2/ Hai mục", "1, Một mục\n2, Hai mục"),
+        ("Tỉ lệ: 1/2. Ngày 24/8/1284.", "Tỉ lệ: 1/2. Ngày 24/8/1284."),
+        ("1/2 số người; 2/3 số sách", "1/2 số người; 2/3 số sách"),
+        ("1/ 2. 2/ 3", "1/ 2. 2/ 3"),
+        ("1/ tháng tám", "1/ tháng tám"),
+        ("1/ Mục riêng. 3/ Mục khác", "1/ Mục riêng. 3/ Mục khác"),
+        ("tên 1/ lựa chọn hoặc 2/ thay thế", "tên 1/ lựa chọn hoặc 2/ thay thế"),
+    ):
+        assert normalize_slash_enumeration(source) == expected
 
 
 def test_excerpt_preserves_paragraph_and_target() -> None:
@@ -27,6 +45,7 @@ def test_excerpt_preserves_paragraph_and_target() -> None:
     paragraph.text = "Phủ Chiêu Quốc "
     ET.SubElement(paragraph, f"{{{XHTML}}}em").text = "đẹp nhất"
     document = DefusedET.fromstring(xhtml_document("Đoạn dài", [paragraph]))
+    assert document.find(f".//{{{XHTML}}}body/{{{XHTML}}}h1") is None
     target = document.find(f".//{{{XHTML}}}p")
     assert target is not None
     assert target.get("id") == "s5-b9"

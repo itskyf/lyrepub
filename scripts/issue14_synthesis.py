@@ -4,10 +4,15 @@ import hashlib
 import importlib.metadata
 import json
 import logging
-import re
 from pathlib import Path
 
-from issue14_feasibility import load_records, ogg_duration, run_tool, save_records
+from issue14_feasibility import (
+    load_records,
+    normalize_slash_enumeration,
+    ogg_duration,
+    run_tool,
+    save_records,
+)
 from nemo_text_processing.text_normalization.normalize import Normalizer
 from sea_g2p import G2P
 
@@ -18,10 +23,10 @@ CHECKPOINT_REVISION = "61b85e3d937fbbacb387714180e8182823512523"
 CHECKPOINT_SHA256 = "c9c23d51989382e27730077c2373023bcfb0891db63a1efec97fd73b4bd6b7dc"
 VOICE_SHA256 = {
     "ref_codes.txt": (
-        "9d084951e34f7c2d3cf7c6bb0f2fbcdc6e61e1e369bb0dfed1c2874077ca6bad"
+        "363b2eee93aeca4f789e1ce63ad904d7e0bef88bb20c830dd2e559ea3fe0054a"
     ),
     "speaker.emb.txt": (
-        "aae1818cda77c25d6ccd39c64387695b895fa5e85c7b279205fea744fb95a400"
+        "ab66bc624b0ffaa735c8ece1aa71b12f18b48bddc2e7cd27ba9eec3d85c2bce9"
     ),
 }
 
@@ -53,9 +58,14 @@ def synthesize(
     normalizer = Normalizer(input_case="cased", lang="vi", deterministic=True)
     phonemizer = G2P(lang="vi")
     for record in selected:
-        text_input = record.get("tts_input", record["source"]["text"])
-        record["tts_input"] = text_input
         try:
+            text_input = normalize_slash_enumeration(record["source"]["text"])
+            record["interventions"] = (
+                ["ordered slash enumeration: marker slash -> comma"]
+                if text_input != record["source"]["text"]
+                else []
+            )
+            record["tts_input"] = text_input
             normalized, phonemes = preprocess(text_input, normalizer, phonemizer)
             if not normalized.strip() or not phonemes.strip():
                 message = "preprocessing produced empty input"
@@ -90,29 +100,6 @@ def preprocess(text: str, normalizer: Normalizer, phonemizer: G2P) -> tuple[str,
     return normalized, phonemizer.convert(normalized, punc_norm=False)
 
 
-def add_variants(records: list[dict], path: Path) -> None:
-    """Add explicit experimental inputs without changing baseline records."""
-    for variant in json.loads(path.read_text(encoding="utf-8")):
-        if not re.fullmatch(r"[a-z0-9-]+", variant["key"]) or not isinstance(
-            variant["tts_input"], str
-        ):
-            message = "variant requires a safe artifact key and explicit text input"
-            raise ValueError(message)
-        baseline = next(r for r in records if r["key"] == variant["variant_of"])
-        if baseline.get("status") != "ok" or any(
-            r["key"] == variant["key"] for r in records
-        ):
-            message = "variant requires completed baseline and a distinct unused key"
-            raise ValueError(message)
-        record = {
-            **variant,
-            "source": baseline["source"],
-            "case": False,
-            "playback": False,
-        }
-        records.append(record)
-
-
 def inspect_image(image: str) -> dict:
     stdout, _ = run_tool(["podman", "image", "inspect", image])
     metadata = json.loads(stdout)[0]
@@ -120,23 +107,25 @@ def inspect_image(image: str) -> dict:
     if revision != AUDIOCPP_REVISION:
         message = "audio.cpp image revision differs from the feasibility pin"
         raise ValueError(message)
+    cli_version, _ = run_tool(["podman", "run", "--rm", image, "cli", "--version"])
     return {
         "input": image,
         "id": metadata["Id"],
         "repo_digests": metadata["RepoDigests"],
         "revision": revision,
+        "cli_version": cli_version.strip(),
     }
 
 
 def validate_inputs(model: Path, voice_dir: Path) -> list[Path]:
     required = [model, voice_dir / "ref_codes.txt", voice_dir / "speaker.emb.txt"]
     if any(not path.is_file() for path in required):
-        message = f"missing audio.cpp model or Thục Đoan assets: {required}"
+        message = f"missing audio.cpp model or Quỳnh Anh assets: {required}"
         raise FileNotFoundError(message)
     if sha256(model) != CHECKPOINT_SHA256 or any(
         sha256(path) != VOICE_SHA256[path.name] for path in required[1:]
     ):
-        message = "checkpoint or Thục Đoan assets differ from the feasibility pin"
+        message = "checkpoint or Quỳnh Anh assets differ from the feasibility pin"
         raise ValueError(message)
     if importlib.metadata.version("sea-g2p") != "0.9.1":
         message = "this feasibility run requires sea-g2p 0.9.1"
@@ -159,7 +148,10 @@ def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
         "checkpoint": f"pnnbao-ump/VieNeu-TTS-v3-Turbo@{CHECKPOINT_REVISION}",
         "checkpoint_precision": "BF16 talker, F16 codec",
         "checkpoint_sha256": sha256(model),
-        "voice": "Thục Đoan",
+        "voice": "Quỳnh Anh",
+        "voice_id": "quynh_anh",
+        "voice_package_path": "gguf/voices/quynh_anh",
+        "tts_input_treatment": "ordered slash enumeration: marker slash -> comma",
         "voice_assets_sha256": {path.name: sha256(path) for path in required[1:]},
         "frontend": (
             f"sea-g2p {importlib.metadata.version('sea-g2p')} "

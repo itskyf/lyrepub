@@ -10,6 +10,7 @@ import importlib
 import json
 import logging
 import os
+import re
 import tempfile
 import zipfile
 from datetime import UTC, datetime
@@ -47,6 +48,30 @@ DC = "http://purl.org/dc/elements/1.1/"
 SMIL = "http://www.w3.org/ns/SMIL"
 EPUB = "http://www.idpf.org/2007/ops"
 LOGGER = logging.getLogger(__name__)
+
+
+def normalize_slash_enumeration(text: str) -> str:
+    """Separate ordered slash-list markers; leave ambiguous slashes unchanged."""
+    markers = list(
+        re.finditer(r"(?:^|(?<=[(:;.\n]))[ \t]*(\d+)/[ \t]+(?=[^\W\d_])", text)
+    )
+    replacements = []
+    run = []
+    minimum_markers = 2
+    for marker in markers:
+        number = int(marker.group(1))
+        if run and number != int(run[-1].group(1)) + 1:
+            if len(run) >= minimum_markers:
+                replacements.extend(run)
+            run = []
+        if run or number == 1:
+            run.append(marker)
+    if len(run) >= minimum_markers:
+        replacements.extend(run)
+    for marker in reversed(replacements):
+        slash = marker.end(1)
+        text = text[:slash] + "," + text[slash + 1 :]
+    return text
 
 
 def run_tool(command: list[str]) -> tuple[str, str]:
@@ -165,7 +190,6 @@ def xhtml_document(title: str, paragraphs: list[ET.Element]) -> bytes:
         {"rel": "stylesheet", "href": "../Styles/overlay.css", "type": "text/css"},
     )
     body = ET.SubElement(root, f"{{{XHTML}}}body")
-    ET.SubElement(body, f"{{{XHTML}}}h1").text = title
     body.extend(paragraphs)
     return ET.tostring(root, encoding="utf-8", xml_declaration=True)
 
@@ -303,7 +327,8 @@ def publish(output: Path, source: Path) -> None:
             "schema:accessibilitySummary",
             (
                 "Text-only feasibility excerpt with synchronized narration. "
-                "Audio quality and playback usability await human review."
+                "Paragraph highlighting was rejected in human review as too "
+                "coarse for publication. New selected-voice audio awaits listening."
             ),
         ),
     ):
@@ -408,7 +433,6 @@ def main() -> None:
     parser.add_argument("--model", type=Path)
     parser.add_argument("--voice-dir", type=Path)
     parser.add_argument("--image")
-    parser.add_argument("--variants", type=Path)
     args = parser.parse_args()
     if args.step in {"prepare", "publish"} and args.source_epub is None:
         parser.error("--source-epub is required")
@@ -418,10 +442,6 @@ def main() -> None:
         if any(v is None for v in (args.model, args.voice_dir, args.image)):
             parser.error("synthesize requires --model, --voice-dir, --image")
         synthesis = importlib.import_module("issue14_synthesis")
-        if args.variants:
-            records = load_records(args.output)
-            synthesis.add_variants(records, args.variants)
-            save_records(args.output, records)
         synthesis.synthesize(
             args.output,
             args.model,

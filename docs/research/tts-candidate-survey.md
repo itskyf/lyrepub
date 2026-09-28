@@ -8,9 +8,9 @@
 
 **VieNeu-TTS v3 Turbo** is selected for the TTS pathway. Its current repository describes v3 Turbo as the latest open-source VieNeu-TTS release, with Vietnamese/English support, 48 kHz output, built-in preset voices, and optional reference voice cloning ([runtime](https://github.com/pnnbao97/VieNeu-TTS), [checkpoint](https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo)). The exact runtime and checkpoint revision used for reported evaluation is frozen in #14.
 
-The selected narration voice is the built-in preset **`Thục Đoan`**, which is present in the current v3 Turbo preset set. This avoids a reference-audio dependency.
+The selected narration voice is the built-in preset **`Quỳnh Anh`**, which is present in the current v3 Turbo preset set. This avoids a reference-audio dependency.
 
-The voice decision comes from focused pre-experiment listening, not a scored comparison: the cloned voices tested for this coursework sounded less natural for audiobook narration in **prosody**, particularly speaking rate and pause placement, than the preset voices auditioned. `Thục Đoan` was accepted as the preferred preset. This is a project-specific selection rationale, not evidence that preset voices or VieNeu-TTS are generally superior to voice cloning.
+The voice decision comes from focused pre-experiment listening, not a scored comparison: the cloned voices tested for this coursework sounded less natural for audiobook narration in **prosody**, particularly speaking rate and pause placement, than the preset voices auditioned. Human review selected `Quỳnh Anh` (female, Northern Vietnamese, storytelling) as the preferred preset; it retains the same main feasibility limitations. This is a project-specific selection rationale, not evidence that preset voices or VieNeu-TTS are generally superior to voice cloning.
 
 No further TTS candidate comparison is planned. Issue #14 checks whether the selected VieNeu-TTS configuration handles the source-derived representative and challenge cases, establishes the publication-usable timing path, records any required preprocessing, and retains unsupported cases for explicit review.
 
@@ -20,7 +20,7 @@ The remaining entries preserve decision-relevant survey evidence. They are alter
 
 | Candidate and primary source | Relevant documented evidence and constraint | Disposition |
 | --- | --- | --- |
-| **[VieNeu-TTS v3 Turbo](https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo)** ([runtime](https://github.com/pnnbao97/VieNeu-TTS)) | D: Vietnamese/English, preset voices, reference cloning, local CPU ONNX or CUDA paths, 48 kHz. Current runtime lists v3 Turbo as the latest open-source release. | **Selected.** Use preset `Thục Đoan`; freeze exact revision and settings in #14. |
+| **[VieNeu-TTS v3 Turbo](https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo)** ([runtime](https://github.com/pnnbao97/VieNeu-TTS)) | D: Vietnamese/English, preset voices, reference cloning, local CPU ONNX or CUDA paths, 48 kHz. Current runtime lists v3 Turbo as the latest open-source release. | **Selected.** Use preset `Quỳnh Anh`; freeze exact revision and settings in #14. |
 | **[KorvaTTS](https://github.com/dogenthq/KorvaTTS)** | D: Vietnamese-first ONNX Runtime system, Vietnamese/English code-switching, bundled preset voices, 44.1 kHz, Apache-2.0 code and weights. Voice cloning is currently roadmap work rather than a released capability. | Surveyed alternative; no run required after VieNeu-TTS selection. |
 | **[ZeroTTS](https://huggingface.co/zeroweight-ai/ZeroTTS)** ([code](https://github.com/zeroweight-ai/ZeroTTS)) | D: Vietnamese local ONNX path and shipped voice latents; A: raw numbers/dates/acronyms and long-form examples. Current release does not publish the encoder needed to create new local clones. | Not promoted. |
 | **[VoxCPM2](https://huggingface.co/openbmb/VoxCPM2)** | D: multilingual synthesis including Vietnamese, English, and French; reference voice and text-directed voice paths. Larger runtime than needed for the selected path. | Not promoted. |
@@ -53,4 +53,4 @@ If a blocking case requires another TTS system or a methodological change, retai
 
 ## Survey conclusion
 
-The survey no longer supports a broad TTS pilot. VieNeu-TTS v3 Turbo with preset `Thục Đoan` is the selected starting configuration. The remaining research question is whether that configuration, with explicitly recorded source-justified processing, is sufficient for the selected books and synchronized publication workflow.
+The survey no longer supports a broad TTS pilot. VieNeu-TTS v3 Turbo with preset `Quỳnh Anh` is the selected starting configuration. The remaining research question is whether that configuration, with explicitly recorded source-justified processing, is sufficient for the selected books and synchronized publication workflow.
