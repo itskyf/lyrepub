@@ -170,15 +170,18 @@ This changes sentence 001, authored offsets `[34, 95)`. The exact TTS input is:
 Its upstream normalized chunk is:
 `dường như cả thăng long, sát thát! sát thát! sát thát!`
 Final sentence Opus duration is **3.926 s**; recombined case is **7.916 s**.
-Generation and lexical trace are not human pronunciation acceptance.
+The current full-case file measures 7.916500 s with ffprobe, recorded as 7.916 s
+by the existing millisecond rounding in `cases.json`.
+Human listening accepts `audio/case=s17-b135,sentence=001.opus` as lexically
+correct after this explicit manual intervention. Raw SEA-G2P normalization
+remains a recorded failure; the upstream frontend itself has not been fixed.
 
 Raw failed sentence audio and its trace are retained in the fresh output with
 `input=raw` names. The historical replacement that caused omission under the
 older pathway remains rejected evidence in `data/issue-14-feasibility-review/`;
 no generic variant infrastructure is restored for this new reviewed correction.
 
-Even if the new lexical pronunciation is accepted, this selected route has no
-documented per-span shout/loudness control. The stronger/extended cry indicated
+This selected route has no documented per-span shout/loudness control. The stronger/extended cry indicated
 by typography remains an **expressive-prosody limitation**.
 
 ### Accepted human findings after semantic chunking
@@ -189,9 +192,10 @@ by typography remains an **expressive-prosody limitation**.
 | `s15-b17`, sentence 001 | 1284 and the later internal boundary are correct. |
 | `s2-b70` | Ordered-list separation correct; narrow slash-list -> comma treatment accepted. |
 | `s5-b9` | Long-form prosody under sentence synthesis acceptable. |
+| `s17-b135`, sentence 001 | Lexically correct after explicit manual normalization; stronger/extended shout remains unsupported. |
 
-These are listening observations, not scores. Their synthesis inputs, chunks,
-phonemes and gaps remain unchanged; byte-identical accepted audio is reused.
+These are listening observations, not scores. No synthesis inputs or audio
+changed for this documentation update.
 They are removed from the pending-listening gate.
 
 ## Prior stutter diagnosis and reviewed synthesis-unit revision
@@ -285,7 +289,7 @@ checks, not listener acceptance of the regenerated audio.
 | `s12-b30` | 5 | 5 | 27.576 |
 | `s12-b68` | 17 | 18 | 91.876 |
 | `s15-b17` | 2 | 3 | 18.916 |
-| `s17-b135` | 3 | 3 | 8.736 |
+| `s17-b135` | 3 | 3 | 7.916 |
 | `s18-b35` | 8 | 8 | 36.056 |
 
 ## Frozen synchronization decision and Issue #16 handoff
@@ -324,8 +328,8 @@ IDs, targeting changes or generic publisher changes are made here.
 
 The tokenizer, runtime, frontend and synthesis-unit mechanics are reproducibly
 specified, and the accepted components are ready for freeze. Full configuration
-freeze still awaits the remaining foreign/date, mixed-name, boundary and corrected
-cry listening findings. This pass does not freeze them or run reported evaluation.
+freeze still awaits the remaining foreign/date, mixed-name and boundary
+listening findings. This pass does not freeze them or run reported evaluation.
 
 ## Diagnostic EPUB and validation
 
@@ -380,7 +384,7 @@ This is one-time artifact staging, without migration compatibility or a layout
 abstraction. The unused private normalization trace field is removed explicitly;
 public normalized chunks and phonemes remain the frontend evidence.
 
-Pending listening paths under `data/issue-14-final-frontend-review/`:
+Pending listening paths under `data/silver/issue-14/` in the **main worktree**:
 
 - `audio/case=s12-b30,sentence=000.opus`: year range/foreign-name normalization.
 - `audio/case=s12-b30,sentence=002.opus`: Koubilay and surrounding foreign text.
@@ -389,18 +393,31 @@ Pending listening paths under `data/issue-14-final-frontend-review/`:
   forms remain source behavior; listen to the changed frontend realization.
 - `audio/case=s10-b42,sentence=023.opus`: internal synthesis boundary.
 - `audio/case=s12-b68,sentence=016.opus`: internal synthesis boundary.
-- `audio/case=s17-b135,sentence=001.opus`: corrected lexical cry; stronger shout
-  remains unsupported even if lexical pronunciation is accepted.
 
 Raw failure: `audio/case=s17-b135,sentence=001,input=raw.opus`, with matching raw
-PCM/log evidence. Optional full corrected case: `audio/case=s17-b135.opus`.
-Already accepted 1256, 1284, list separation and full long-block audio are not
-pending listening; their synthesis inputs/audio did not change.
+frontend/chunk/request evidence in `cases.json`. Optional full corrected case:
+`audio/case=s17-b135.opus`.
+Already accepted 1256, 1284, list separation, full long-block audio and corrected
+cry pronunciation are not pending listening; their synthesis inputs/audio did not change.
 
 Exact normalized outputs, phonemes, requests and final timings are retained in
 `cases.json` and `frontend-comparison.json`; actual pins/settings are in
 `runtime.json`. Sentence indexes identify logical source targets, not XHTML IDs.
 No subjective score or acceptance is inferred from successful generation.
+
+The main-worktree `data/silver/issue-14/` handoff retains the four aggregate JSON
+files unchanged and all **128 final Opus files**: 118 selected sentences, nine
+full cases and the raw cry failure. All 118 source text/offset triples and
+packaged-audio references/intervals were verified. Intermediate WAV/log references
+in the records describe historical execution; those files are intentionally not
+copied. Issue #16 can consume `packaged_audio` and final sentence intervals.
+
+Two unique earlier artifacts are retained alongside them:
+`number-boundary-diagnostic.json` from `issue-14-quynh-anh-review/`, and
+`feasibility.epub` from `issue-14-feasibility-review/`. The latter is the repaired
+paragraph-level artifact used for the human granularity decision (481.036 s,
+including synthetic headings), preceding the later 465.316 s diagnostic described
+above. No intermediate audio, models, assets, logs or validator images are staged.
 
 Docker bake and validator-image work are retained. No new EPUB, EPUBCheck, Ace,
 reader test, system application/package change or Issue #16 implementation is
