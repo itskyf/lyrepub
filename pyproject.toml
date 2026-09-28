@@ -5,8 +5,9 @@ authors = [{ name = "Kỳ", email = "40734986+itskyf@users.noreply.github.com" }
 dependencies = [
   "defusedxml>=0.7.1,<0.8",
   "fast-ebook>=0.2.0,<0.3",
-  "nemo-text-processing @ git+https://github.com/itskyf/NeMo-text-processing@c3afd14899658d53920b2737ff4d7216d9a32c83?rev_type=rev",
+  "sea-g2p==0.10.0",
   "transformers[torch]>=5.17.0,<6",
+  "vieneu==3.8.3",
   "wtpsplit>=2.2.2,<3",
 ]
 dynamic = ["version"]
@@ -41,5 +42,4 @@ dev = { features = ["dev"], solve-group = "default" }
 [tool.pixi.dependencies]
 cxx-compiler = ">=2.0.0,<3"
 ffmpeg = ">=9.0.1,<10"
-openfst = ">=1.8.4,<2"
 python = ">=3.13,<3.14"

@@ -1,25 +1,14 @@
-"""Deterministic checks for Issue #14 case and overlay bookkeeping."""
+"""Focused frontend feasibility checks; no sentence model or synthesis inference."""
 
-import hashlib
-import json
-from decimal import Decimal
 from pathlib import Path
-from xml.etree import ElementTree as ET
-from zipfile import ZipFile
 
 import pytest
-from defusedxml import ElementTree as DefusedET
 
-from scripts.issue14_feasibility import (
-    OPF,
-    PLAYBACK,
-    SMIL,
-    XHTML,
-    key,
-    normalize_slash_enumeration,
-    publish,
-    source_paragraph,
-    xhtml_document,
+from scripts.issue14_feasibility import normalize_slash_enumeration
+from scripts.issue14_synthesis import (
+    frontend_identity,
+    prepare_sentences,
+    run_audio_cpp,
 )
 
 
@@ -40,103 +29,56 @@ def test_slash_enumeration_treatment() -> None:
         assert normalize_slash_enumeration(source) == expected
 
 
-def test_excerpt_preserves_paragraph_and_target() -> None:
-    paragraph = ET.Element(f"{{{XHTML}}}p", {"id": key(5, 9)})
-    paragraph.text = "Phủ Chiêu Quốc "
-    ET.SubElement(paragraph, f"{{{XHTML}}}em").text = "đẹp nhất"
-    document = DefusedET.fromstring(xhtml_document("Đoạn dài", [paragraph]))
-    assert document.find(f".//{{{XHTML}}}body/{{{XHTML}}}h1") is None
-    target = document.find(f".//{{{XHTML}}}p")
-    assert target is not None
-    assert target.get("id") == "s5-b9"
-    assert "".join(target.itertext()) == "Phủ Chiêu Quốc đẹp nhất"
+def test_frontend_identity() -> None:
+    identity = frontend_identity()
+    assert identity["versions"] == {"vieneu": "3.8.3", "sea-g2p": "0.10.0"}
+    assert identity["dictionary_sha256"] == (
+        "4346e690d0711ebc5231e7a42c5c88aaf6e40377e894b4617c018fd81c6f4096"
+    )
 
 
-def test_source_paragraph_resolves_block_path_without_changing_text(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "source.epub"
-    with ZipFile(source, "w") as archive:
-        archive.writestr(
-            "OEBPS/Text/6.html",
-            f'<html xmlns="{XHTML}"><head/><body><p>Trước.</p>'
-            "<p>Phủ <em>Chiêu Quốc</em>.</p></body></html>",
+def test_number_phrases_survive_upstream_chunks() -> None:
+    for year, phrase in (
+        ("1256", "một nghìn hai trăm năm mươi sáu"),
+        ("1284", "một nghìn hai trăm tám mươi bốn"),
+    ):
+        source = "Nhà vua đã chuẩn bị quân lính và thuyền bè " * 7 + f"vào năm {year}."
+        target = prepare_sentences(source, source, [source])[0]
+        assert len(target["chunks"]) > 1
+        assert (
+            sum(phrase in chunk["normalized_text"] for chunk in target["chunks"]) == 1
         )
-    record = {
-        "key": "s5-b9",
-        "source": {
-            "href": "Text/6.html",
-            "element_path": (1, 1),
-            "element_id": None,
-            "text": "Phủ Chiêu Quốc.",
-        },
-    }
-    paragraph = source_paragraph(source, record)
-    assert paragraph.get("id") == "s5-b9"
-    assert "".join(paragraph.itertext()) == "Phủ Chiêu Quốc."
 
 
-def test_packaged_opus_bounds_and_duration_metadata(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
+def test_sentence_mapping_and_internal_chunks(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
-    source = tmp_path / "source.epub"
-    source.write_bytes(b"source")
-    output = tmp_path / "output"
-    audio = output / "audio"
-    audio.mkdir(parents=True)
-    records = []
-    for spine, block in PLAYBACK:
-        case_key = key(spine, block)
-        (audio / f"{case_key}.ogg").write_bytes(b"ogg")
-        records.append({"key": case_key, "playback": True, "status": "ok"})
-    (output / "cases.json").write_text(json.dumps(records))
-    (output / "source.json").write_text(
-        json.dumps({"sha256": hashlib.sha256(source.read_bytes()).hexdigest()})
+    source = "  Năm 1284.  Nhà vua trở về. "
+    sentences = ["Năm 1284.", "Nhà vua trở về."]
+    mapped = prepare_sentences(source, source, sentences)
+    assert mapped == prepare_sentences(source, source, sentences)
+    assert [(s["source_start"], s["source_end"]) for s in mapped] == [(2, 11), (13, 28)]
+    assert (
+        mapped[0]["chunks"][0]["normalized_text"]
+        == "năm một nghìn hai trăm tám mươi bốn."
     )
-    monkeypatch.setattr(
-        "scripts.issue14_feasibility.ogg_duration", lambda _: Decimal("1.250")
-    )
-    monkeypatch.setattr(
-        "scripts.issue14_feasibility.source_paragraph",
-        lambda _source, record: ET.Element(f"{{{XHTML}}}p", {"id": record["key"]}),
-    )
-    publish(output, source)
-    with ZipFile(output / "feasibility.epub") as archive:
-        package = DefusedET.fromstring(archive.read("EPUB/package.opf"))
-        metadata = package.findall(f".//{{{OPF}}}meta")
-        assert [
-            m.text for m in metadata if m.get("property") == "schema:accessMode"
-        ] == ["textual"]
-        for prop, expected in (
-            ("schema:accessModeSufficient", "textual"),
-            ("schema:accessibilityFeature", "synchronizedAudioText"),
-            ("schema:accessibilityHazard", "none"),
-        ):
-            assert [m.text for m in metadata if m.get("property") == prop] == [expected]
-        summary = next(
-            m.text
-            for m in metadata
-            if m.get("property") == "schema:accessibilitySummary"
-        )
-        assert summary
-        assert "feasibility excerpt" in summary
-        assert "human review" in summary
-        items = package.findall(f".//{{{OPF}}}item")
-        audio_items = [i for i in items if i.get("href", "").endswith(".ogg")]
-        assert len(audio_items) == len(PLAYBACK)
-        assert all(i.get("media-type") == "audio/ogg; codecs=opus" for i in audio_items)
-        durations = package.findall(f".//{{{OPF}}}meta[@property='media:duration']")
-        assert {(m.get("refines"), m.text) for m in durations} == {
-            (None, "7.500s"),
-            ("#mo-s5", "3.750s"),
-            ("#mo-s10", "3.750s"),
-        }
-        for name in ("s5", "s10"):
-            smil = DefusedET.fromstring(archive.read(f"EPUB/Overlays/{name}.smil"))
-            clips = smil.findall(f".//{{{SMIL}}}audio")
-            assert len(clips) == 3
-            assert all(
-                c.get("clipBegin") == "0.000s" and c.get("clipEnd") == "1.250s"
-                for c in clips
-            )
+    with pytest.raises(ValueError, match="uncovered"):
+        prepare_sentences(source, source, sentences[:1])
+
+    commands = []
+    audio = tmp_path / "audio"
+    audio.mkdir()
+    (tmp_path / "traces").mkdir()
+    chunk = mapped[0]["chunks"][0] | {"key": "target-chunk-00", "seed": 14}
+
+    def fake_runtime(command: list[str]) -> tuple[str, str]:
+        commands.append(command)
+        (audio / "target-chunk-00.wav").write_bytes(b"pcm")
+        return "log", ""
+
+    monkeypatch.setattr("scripts.issue14_synthesis.run_tool", fake_runtime)
+    run_audio_cpp(tmp_path, tmp_path / "model", tmp_path / "voice", "image", chunk)
+    budget = len(chunk["phonemes"].encode("utf-8"))
+    assert f"text_chunk_size={budget}" in commands[0]
+    assert chunk["text_chunk_size_bytes"] == budget
+    assert not any("g2p_dict=" in part for part in commands[0])

@@ -6,19 +6,29 @@ import json
 import logging
 from pathlib import Path
 
-from issue14_feasibility import (
+import numpy as np
+import soundfile as sf
+from vieneu_utils.core_utils import gaps_to_silence, join_audio_chunks
+from vieneu_utils.phonemize_text import (
+    _normalized_sentences_by_para,
+    normalize_to_chunks_v3_with_gaps,
+    phonemize_text_with_emotions,
+)
+
+from lyrepub.segmentation import SAT_NAME, SAT_REVISION, segment_sentences
+from scripts.issue14_feasibility import (
     load_records,
     normalize_slash_enumeration,
     ogg_duration,
     run_tool,
     save_records,
 )
-from nemo_text_processing.text_normalization.normalize import Normalizer
-from sea_g2p import G2P
 
 LOGGER = logging.getLogger(__name__)
 AUDIOCPP_REVISION = "955c8725c611d511774e6be132aff6609163b2d2"
-NEMO_REVISION = "c3afd14899658d53920b2737ff4d7216d9a32c83"
+VIENEU_REVISION = "c1390abbdb2eedcdf58eafb546966c06ce27af71"
+SEA_REVISION = "dae5ca83ea45f356c43bdb70a1bcd42e8729ff16"
+DICTIONARY_SHA256 = "4346e690d0711ebc5231e7a42c5c88aaf6e40377e894b4617c018fd81c6f4096"
 CHECKPOINT_REVISION = "61b85e3d937fbbacb387714180e8182823512523"
 CHECKPOINT_SHA256 = "c9c23d51989382e27730077c2373023bcfb0891db63a1efec97fd73b4bd6b7dc"
 VOICE_SHA256 = {
@@ -55,9 +65,8 @@ def synthesize(
     )
     records = load_records(output)
     selected = [record for record in records if record.get("status") != "ok"]
-    normalizer = Normalizer(input_case="cased", lang="vi", deterministic=True)
-    phonemizer = G2P(lang="vi")
     for record in selected:
+        record.pop("error", None)
         try:
             text_input = normalize_slash_enumeration(record["source"]["text"])
             record["interventions"] = (
@@ -66,12 +75,16 @@ def synthesize(
                 else []
             )
             record["tts_input"] = text_input
-            normalized, phonemes = preprocess(text_input, normalizer, phonemizer)
-            if not normalized.strip() or not phonemes.strip():
-                message = "preprocessing produced empty input"
-                raise ValueError(message)
-            record["phonemes"] = phonemes
-            record["normalized_text"] = normalized
+            record["sentences"] = prepare_sentences(
+                record["source"]["text"],
+                text_input,
+                segment_sentences(record["source"]["text"]),
+            )
+            record["raw_frontend"] = prepare_sentences(
+                record["source"]["text"],
+                record["source"]["text"],
+                [sentence["source_text"] for sentence in record["sentences"]],
+            )
             record["status"] = "preprocessed"
             save_records(output, records)
             seed = (
@@ -80,7 +93,7 @@ def synthesize(
                 + record["source"]["block_index"]
             )
             record["seed"] = seed
-            run_audio_cpp(output, model, voice_dir, image, record)
+            synthesize_sentences(output, model, voice_dir, image, record)
         except (OSError, ValueError, RuntimeError) as exc:
             record["status"] = (
                 "preprocessing_failure"
@@ -92,12 +105,72 @@ def synthesize(
         LOGGER.info("%s: %s", record["key"], record["status"])
 
 
-def preprocess(text: str, normalizer: Normalizer, phonemizer: G2P) -> tuple[str, str]:
-    """Apply only NeMo Vietnamese TN, then SEA-G2P phonemization."""
-    normalized = normalizer.normalize(
-        text, verbose=False, punct_pre_process=False, punct_post_process=False
+def prepare_sentences(source: str, text_input: str, sentences: list[str]) -> list[dict]:
+    """Map authored sentences to upstream normalized synthesis chunks without loss."""
+    if len(source) != len(text_input):
+        message = "enumeration treatment must preserve source offsets"
+        raise ValueError(message)
+    result = []
+    cursor = 0
+    for index, sentence in enumerate(sentences):
+        start = source.find(sentence, cursor)
+        if start < 0 or source[cursor:start].strip():
+            message = "sentence segmentation lost or changed authored text"
+            raise ValueError(message)
+        end = start + len(sentence)
+        prepared = text_input[start:end]
+        chunks, gaps = normalize_to_chunks_v3_with_gaps(prepared)
+        if not chunks or any(not chunk.strip() for chunk in chunks):
+            message = "frontend produced empty synthesis input"
+            raise ValueError(message)
+        result.append(
+            {
+                "index": index,
+                "source_start": start,
+                "source_end": end,
+                "source_text": sentence,
+                "tts_input": prepared,
+                "normalized_parts": _normalized_sentences_by_para(prepared),
+                "gaps": gaps,
+                "chunks": [
+                    {
+                        "normalized_text": chunk,
+                        "phonemes": phonemize_text_with_emotions(chunk),
+                    }
+                    for chunk in chunks
+                ],
+            }
+        )
+        cursor = end
+    if source[cursor:].strip() or not result:
+        message = "sentence segmentation left authored text uncovered"
+        raise ValueError(message)
+    return result
+
+
+def frontend_identity() -> dict:
+    versions = {
+        name: importlib.metadata.version(name) for name in ("vieneu", "sea-g2p")
+    }
+    if versions != {"vieneu": "3.8.3", "sea-g2p": "0.10.0"}:
+        message = "frontend packages differ from the feasibility pins"
+        raise ValueError(message)
+    dictionary = importlib.metadata.distribution("sea-g2p").locate_file(
+        "sea_g2p/sea_g2p.bin"
     )
-    return normalized, phonemizer.convert(normalized, punc_norm=False)
+    digest = sha256(Path(dictionary))
+    if digest != DICTIONARY_SHA256:
+        message = "SEA-G2P dictionary differs from the feasibility pin"
+        raise ValueError(message)
+    return {
+        "versions": versions,
+        "vieneu_revision": VIENEU_REVISION,
+        "sea_g2p_revision": SEA_REVISION,
+        "dictionary_sha256": digest,
+        "normalization": "upstream Vietnamese SEA-G2P",
+        "chunking": {"max_chars": 256, "min_chunk_chars": 20},
+        "phonemization": "upstream phonemize_text_with_emotions",
+    }
 
 
 def inspect_image(image: str) -> dict:
@@ -127,22 +200,13 @@ def validate_inputs(model: Path, voice_dir: Path) -> list[Path]:
     ):
         message = "checkpoint or Quỳnh Anh assets differ from the feasibility pin"
         raise ValueError(message)
-    if importlib.metadata.version("sea-g2p") != "0.9.1":
-        message = "this feasibility run requires sea-g2p 0.9.1"
-        raise ValueError(message)
-    nemo_url = json.loads(
-        importlib.metadata.distribution("nemo-text-processing").read_text(
-            "direct_url.json"
-        )
-    )
-    if nemo_url["vcs_info"]["commit_id"] != NEMO_REVISION:
-        message = "NeMo Vietnamese TN differs from the repository pin"
-        raise ValueError(message)
+    frontend_identity()
     return required
 
 
 def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
     return {
+        "purpose": "frontend and synthesis-unit feasibility; not reported evaluation",
         "runtime": "audio.cpp",
         "image": image,
         "checkpoint": f"pnnbao-ump/VieNeu-TTS-v3-Turbo@{CHECKPOINT_REVISION}",
@@ -153,19 +217,12 @@ def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
         "voice_package_path": "gguf/voices/quynh_anh",
         "tts_input_treatment": "ordered slash enumeration: marker slash -> comma",
         "voice_assets_sha256": {path.name: sha256(path) for path in required[1:]},
-        "frontend": (
-            f"sea-g2p {importlib.metadata.version('sea-g2p')} "
-            "G2P(vi), phonemization only, punc_norm=False"
-        ),
-        "normalization": {
-            "package": "nemo-text-processing",
-            "revision": NEMO_REVISION,
-            "lang": "vi",
-            "input_case": "cased",
-            "deterministic": True,
-            "post_process": True,
-            "punct_pre_process": False,
-            "punct_post_process": False,
+        "frontend": frontend_identity(),
+        "sentence_segmentation": {
+            "checkpoint": SAT_NAME,
+            "revision": SAT_REVISION,
+            "wtpsplit_version": importlib.metadata.version("wtpsplit"),
+            "tokenizer": "facebookAI/xlm-roberta-base (upstream unpinned default)",
         },
         "backend": "cuda",
         "seed_per_block": "14 + source spine index * 1000 + block index",
@@ -181,22 +238,26 @@ def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
             "babble_retries": 2,
         },
         "audio_cpp_chunking": {
-            "text_chunk_size": 200,
+            "text_chunk_size": "exact prepared phoneme UTF-8 byte length per request",
             "text_chunk_min": 20,
+            "native_frontend": "not invoked: prepared phonemes, no g2p_dict",
         },
-        "audio_cpp_minimum_pauses_seconds": {
-            "paragraph": 0.7,
-            "sentence": 0.5,
-            "minor": 0.3,
-        },
+        "pcm_channels": "stereo decoder output averaged to mono for upstream join",
+        "internal_join": "upstream join_audio_chunks and gaps_to_silence",
+        "sentence_join": "upstream join_audio_chunks with sentence gap 0.50 s",
     }
 
 
 def run_audio_cpp(
     output: Path, model: Path, voice_dir: Path, image: str, record: dict
 ) -> None:
-    """Generate and package one already-phonemized source target."""
+    """Synthesize one upstream-prepared phoneme chunk without a second split."""
     phonemes = record["phonemes"]
+    if not phonemes.strip() or "\n" in phonemes:
+        message = "prepared request must contain one nonempty phoneme paragraph"
+        raise ValueError(message)
+    # The runtime repacks punctuation pieces within this byte budget.
+    record["text_chunk_size_bytes"] = len(phonemes.encode("utf-8"))
     seed = record["seed"]
     name = record["key"]
     command = [
@@ -231,6 +292,8 @@ def run_audio_cpp(
         "--seed",
         str(seed),
         "--request-option",
+        f"text_chunk_size={record['text_chunk_size_bytes']}",
+        "--request-option",
         "reference_codes_file=/inputs/voice/ref_codes.txt",
         "--request-option",
         "speaker_embedding_file=/inputs/voice/speaker.emb.txt",
@@ -249,7 +312,13 @@ def run_audio_cpp(
     if not wav.is_file() or wav.stat().st_size == 0:
         message = "audio.cpp returned no audio"
         raise RuntimeError(message)
-    ogg = output / "audio" / f"{name}.ogg"
+    record["audio"] = f"audio/{name}.wav"
+
+
+def package_audio(output: Path, name: str, pcm: np.ndarray, rate: int) -> dict:
+    wav = output / "audio" / f"{name}.wav"
+    opus = output / "audio" / f"{name}.opus"
+    sf.write(wav, pcm, rate, subtype="PCM_16")
     run_tool(
         [
             "ffmpeg",
@@ -262,13 +331,49 @@ def run_audio_cpp(
             "libopus",
             "-b:a",
             "96k",
-            str(ogg),
+            str(opus),
         ]
     )
-    if not ogg.is_file() or ogg.stat().st_size == 0:
-        message = "Opus packaging returned no audio"
-        raise RuntimeError(message)
-    record["audio"] = f"audio/{name}.wav"
-    record["packaged_audio"] = f"audio/{name}.ogg"
-    record["duration_seconds"] = str(ogg_duration(ogg))
+    duration = str(ogg_duration(opus))
+    return {
+        "audio": f"audio/{name}.wav",
+        "packaged_audio": f"audio/{name}.opus",
+        "pcm_samples": len(pcm),
+        "sample_rate": rate,
+        "clip_begin": "0.000",
+        "clip_end": duration,
+        "duration_seconds": duration,
+    }
+
+
+def synthesize_sentences(
+    output: Path, model: Path, voice_dir: Path, image: str, record: dict
+) -> None:
+    sentences_pcm = []
+    rate = None
+    for sentence in record["sentences"]:
+        chunks_pcm = []
+        name = f"{record['key']}-sentence-{sentence['index']:03d}"
+        for index, chunk in enumerate(sentence["chunks"]):
+            chunk["key"] = f"{name}-chunk-{index:02d}"
+            chunk["seed"] = record["seed"]
+            run_audio_cpp(output, model, voice_dir, image, chunk)
+            pcm, chunk_rate = sf.read(
+                output / chunk["audio"], dtype="float32", always_2d=True
+            )
+            pcm = pcm.mean(axis=1)
+            if rate is not None and rate != chunk_rate:
+                message = "inconsistent PCM sample rates"
+                raise ValueError(message)
+            rate = chunk_rate
+            chunks_pcm.append(pcm)
+        pcm = join_audio_chunks(
+            chunks_pcm, rate, silence_ps=gaps_to_silence(sentence["gaps"])
+        )
+        sentence.update(package_audio(output, name, pcm, rate))
+        sentences_pcm.append(pcm)
+    pcm = join_audio_chunks(
+        sentences_pcm, rate, silence_ps=[0.5] * (len(sentences_pcm) - 1)
+    )
+    record.update(package_audio(output, record["key"], pcm, rate))
     record["status"] = "ok"
