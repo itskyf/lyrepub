@@ -1,6 +1,5 @@
 """Synthetic EPUB Media Overlay publication checks."""
 
-import subprocess
 from datetime import UTC, datetime
 from pathlib import Path
 from xml.etree.ElementTree import Element, SubElement, tostring
@@ -103,27 +102,7 @@ def _source(path: Path) -> dict[str, bytes]:
 @pytest.fixture
 def audio(tmp_path: Path) -> Path:
     path = tmp_path / "tone.opus"
-    subprocess.run(
-        [
-            "ffmpeg",
-            "-hide_banner",
-            "-loglevel",
-            "error",
-            "-f",
-            "lavfi",
-            "-i",
-            "sine=frequency=440:sample_rate=48000:duration=1",
-            "-c:a",
-            "libopus",
-            "-b:a",
-            "16k",
-            "-map_metadata",
-            "-1",
-            "-y",
-            str(path),
-        ],
-        check=True,
-    )
+    path.write_bytes(b"opaque audio resource")
     return path
 
 
