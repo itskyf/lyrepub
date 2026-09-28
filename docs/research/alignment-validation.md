@@ -66,7 +66,7 @@ The six unmatched sentences are the Roman-numeral headings for sections I and II
 The report also contains a 5.8-second loose-audio interval in track 2 at 1093.06–1098.86 seconds.
 The owner's focused listening identified spoken footnote material: approximately "chú thích là năm 1774, chú thích của tác giả, hết chú thích."
 Inspection of the exact `(2)` reference in `OEBPS/Text/section_4.html` (source block 103) found `<a href="note:" title="1774 (chú thích của tác giả)." class="sup"><sup>(2)</sup></a>`.
-The note body therefore exists in EPUB markup as the reference's `title` attribute, but is absent from the narration text used for alignment, which contains only `(2)`.
+The note text is present in the EPUB source as the anchor's `title` attribute, but is absent from the narration text used for alignment, which contains only `(2)`.
 The retained marked-up EPUB preserves this structure.
 Correspondence resumes after the spoken insertion without manual repair.
 These are reported output states, not manually repaired timings.
@@ -74,7 +74,7 @@ Storyteller's internal scores were not used as an acceptance criterion.
 
 ### Manual boundary verification
 
-MOSS BF16 and Qwen3-ASR F16 through the existing audio.cpp service (image revision `955c8725c611d511774e6be132aff6609163b2d2`) were convenience tools for locating and checking clean verification clips, not evaluated routes or timing references.
+MOSS and Qwen3-ASR through the existing audio.cpp service were used only to locate and sanity-check verification regions; their timestamps were not timing references or evaluated routes.
 The repository owner confirmed the four target onsets in 16 kHz mono signed 16-bit PCM WAV clips decoded from the original tracks.
 Clip boundaries fall in quiet regions.
 The invalid preliminary OGG excerpts were discarded; they contribute no reported measurement.
@@ -96,15 +96,14 @@ The table below keeps raw Storyteller timestamps separately from the approximate
 | Spoken "Hai", track 2 | 1.9 s | 1.9 s | 1.54 s | -0.4 s | 0.4 s |
 | "Kim đâu?", track 6 | 13.8 s | 917.8 s | 917.30 s | -0.5 s | 0.5 s |
 
-The first, second, and fourth clip-relative values are the owner's confirmation of the ASR-located region, rounded to the frozen 0.1-second listening precision.
-The owner separately confirmed 1.9 s for the heading after a waveform-based suggestion.
+The repository owner manually confirmed all four clip-relative onsets at the frozen 0.1-second listening precision; ASR and waveform suggestions only helped locate the regions.
 This listening was evaluation assistance; it did not change chapter mapping, sentence alignment, or Storyteller output.
 
 ## Discussion
 
-The automatic route provides complete section correspondence and sentence timings for this source without chapter assistance.
+The automatic route mapped all nine narratable spine documents to the expected tracks without chapter assistance.
 Interpolated sentences, unmatched headings, and the track-2 spoken-footnote insertion remain synchronization limitations.
-The insertion is an explained source/audio mismatch, not evidence of unexplained drift or silence.
+The insertion is an explained mismatch between the spoken audio and Storyteller's narration text, not evidence of unexplained drift or silence.
 The diagnostic context WAV `track2-loose-audio-1075.5s.wav` spans source-track 1075.5–1125.9 seconds, with the reported interval at clip-relative 17.56–23.36 seconds; this listening added no benchmark boundary and changed no system output.
 All four starts in the fixed, manually verified subset precede the heard boundary by approximately 0.3, 0.3, 0.4, and 0.5 seconds, respectively.
 This small subset does not establish general boundary accuracy.
