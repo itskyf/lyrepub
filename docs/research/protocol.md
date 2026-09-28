@@ -101,6 +101,16 @@ Evaluation considers properties relevant to audiobook production, including:
 
 ASR-based CER or WER may be used diagnostically but is not treated as the sole measure of synthesis quality.
 
+#### Frozen Issue #14 evaluation
+
+Issue #14 freezes the TTS experiment to VieNeu-TTS v3 Turbo with the preset voice Quỳnh Anh. Media Overlay synchronization granularity is sentence level. The selected upstream VieNeu/SEA-G2P preprocessing and synthesis-unit path, including the narrow sequential slash-list TTS-input treatment, is the frozen preprocessing; its exact configuration is recorded in the TTS feasibility record, not duplicated here.
+
+The fixed reported benchmark is the nine already reviewed source-derived cases: `s10-b42`, `s5-b26`, `s15-b17`, `s12-b68`, `s12-b30`, `s18-b35`, `s2-b70`, `s5-b9`, `s17-b135`.
+
+The single reviewed `S…át Th.. át! -> Sát Thát!` change is an explicit manual TTS-input intervention for `s17-b135`. Authored EPUB text and source offsets remain unchanged, and the intervention must be reported as required manual correction.
+
+The reported evaluation must run this frozen configuration without changing benchmark material, preprocessing, evaluation criteria, or human-assistance conditions.
+
 ### 5.2 Existing-audiobook alignment
 
 Storyteller `stalign` is the selected alignment implementation family. Route selection is staged rather than treated as a broad ASR or alignment benchmark.

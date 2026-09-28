@@ -160,16 +160,8 @@ structures:
 
 ## Audiobook characterization (Đêm hội Long Trì)
 
-Observed (`audiobook_tracks.csv`, `audiobook_report.txt`): 7 MP3 tracks
-(`dem-hoi-1.mp3`…`dem-hoi-7.mp3`), MP3, 44.1 kHz, stereo, 96 kb/s, total
-16,446.6 s (≈ 4 h 34 m). Tags are near-absent (genre=Blues on all tracks,
-encoded_by=Lavf52.13.0 on tracks 2–7, no title/author/track tags), so
-track identity rests on content, not metadata.
-
-Track-to-section correspondence is a manual judgement, established by
-listening to each bronze track and matching the heard opening and ending
-against EPUB blocks (listener: the repository owner; the heard openings
-and endings are recorded in the table below):
+Observed in `audiobook_tracks.csv` and `audiobook_report.txt`: seven MP3 tracks (`dem-hoi-1.mp3` through `dem-hoi-7.mp3`), 44.1 kHz stereo at 96 kb/s, totaling 16,446.6 s (about 4 h 34 m).
+The files have little useful track metadata, so track-to-section correspondence was established by listening to each track and matching its opening and ending against EPUB blocks.
 
 | Track | Heard opening | Matched EPUB opening | Heard ending | Matched EPUB ending |
 | --- | --- | --- | --- | --- |
@@ -181,36 +173,19 @@ and endings are recorded in the table below):
 | 6 | "Sáu, Khi Nguyễn Mại đến nhậm chức…" | `s8 #1` | "…dẫn ta ra mắt Chúa thượng" | `s8 #318` (last block) |
 | 7 | "Bảy, Trong vương phủ, đèn đuốc sáng trưng…" | `s9 #1` | "…nàng đã ngất trong tay ngài" | `s9 #86` (last block) |
 
-The resulting mapping (recorded in `TRACK_SECTION_CORRESPONDENCE` in
-`scripts/inspect_audiobook.py`): track 1 narrates s1 + s2 + s3. Within
-track 1, listening identified the biographical content (s1, "Nhà văn
-NGUYỄN HUY TƯỞNG (1912 – 1960)… Quê quán: Dục Tú, Đông Anh, Hà Nội",
-`s1 Text/section_11.html #1–#3`), then the heading "LỜI NÓI ĐẦU" spoken
-aloud followed by "Năm 1942, khi tiểu thuyết Đêm hội Long Trì được đăng
-tải…" (`s2 Text/section_2.html #0–#1`), before section I (s3). Tracks 2–7
-narrate s4–s9 one-to-one. Every heard ending matches the final block of
-the mapped section. All 9 narratable spine documents are covered; s0 and
-s10 contain no extracted text and require no text–audio mapping.
+Listening establishes that track 1 narrates s1 (author biography), s2 (LỜI NÓI ĐẦU), and s3 (section I), while tracks 2–7 correspond one-to-one with s4–s9.
+All nine narratable spine documents are therefore covered; s0 and s10 contain no extracted text.
 
-Observed at the coarsest useful level:
+Processing-relevant observations are limited to three source conditions.
+Track 1 begins with a narrator announcement absent from the EPUB.
+Tracks 2–7 verbalize the Roman-numeral section headings as Vietnamese number words, which is a normal reading of the authored heading rather than inserted content.
+No section-level omission or repetition was identified; finer within-section behavior belongs to [alignment validation](alignment-validation.md), not source characterization.
 
-- Insertion: track 1 opens with a narrator announcement ("Tác phẩm Đêm
-  hội long trì, tiểu thuyết…") that has no counterpart in the EPUB.
-- Heading verbalization: tracks 2–7 open with the section heading spoken
-  in words ("Hai"…"Bảy" for the EPUB's numeral headings II–VII) before
-  the section text — a normal reading of the heading, not inserted
-  content.
-- Omissions/repetitions: no section-level mismatch identified; differences
-  within sections were not assessed. Characters per second per confirmed
-  track: range 10.8–11.7, median 11.3 (`audiobook_report.txt`) —
-  descriptive only, not evidence of correspondence.
-- Limits: no sentence alignment, no ASR; finer insert/omit/repeat
-  detection inside sections is deferred to the alignment pilot and evaluation (#13, #15).
+## Source-derived benchmark candidates
 
-## Benchmark candidates for #13
-
-Candidates only — not frozen items, no scores or thresholds. Selected from
-the observed properties above; prefixes pin the block (extraction-drift
+These were candidate cases at characterization time, with no scores or
+thresholds. Later pathway-specific freezes are defined in the
+[research protocol](protocol.md). Prefixes pin the block (extraction-drift
 check, same convention as `src/lyrepub/inspection.py`).
 
 Representative:

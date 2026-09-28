@@ -8,12 +8,12 @@
 
 **Storyteller `stalign`** is selected as the alignment implementation family. Its current source exposes two materially different native route families:
 
-- **CTC emissions -> forced alignment**, selected as the first route;
+- **CTC emissions -> forced alignment**, selected and later frozen by Issue #15;
 - **transcription -> text matching/alignment**, with built-in `whisper.cpp` and other transcription backends.
 
 The current CTC pipeline can generate emissions with a multilingual Wav2Vec2/MMS forced-aligner model and align EPUB reference text directly, without first producing an ASR transcript ([CLI pipeline](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/cli/bin.ts), [emission options](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/emit/parse.ts), [alignment options](https://github.com/smoores-dev/storyteller/blob/main/libraries/align/src/align/parse.ts)). This is the smallest native route because it does not require an external ASR adapter.
 
-Issue #15 therefore begins with native CTC. If that route produces timing output usable for protocol evaluation without a blocking material failure on the selected source, freeze it and stop route exploration. If a blocking material failure is observed, retain the evidence and stop for project-owner review before promoting another documented route. Do not implement an automatic fallback chain.
+Issue #15 subsequently froze native CTC after the selected-source run produced usable timing output without a blocking material failure. No escalation route was needed; the executed configuration and results are recorded in [alignment validation](alignment-validation.md).
 
 ## Route landscape
 
@@ -21,7 +21,7 @@ The remaining entries are escalation evidence, not required experiment arms.
 
 | Route or component | Relevant documented evidence and constraint | Disposition |
 | --- | --- | --- |
-| **`stalign` native CTC + MMS forced-aligner emissions** | D: native emissions and CTC alignment path; current default emission model is `onnx-community/mms-300m-1130-forced-aligner-ONNX`. Reference EPUB text is an explicit forced-alignment input. Vietnamese audiobook suitability remains P. | **First route for #15.** |
+| **`stalign` native CTC + MMS forced-aligner emissions** | D: native emissions and CTC alignment path; current default emission model is `onnx-community/mms-300m-1130-forced-aligner-ONNX`. Reference EPUB text is an explicit forced-alignment input. | **Selected and frozen by #15.** |
 | **`stalign` + built-in `whisper.cpp`** | D: native transcription route with multilingual Whisper models and Storyteller's own transcription/timeline format. Processor parallelism may affect timing accuracy, so materially relevant settings must be recorded. | First native escalation option if CTC has a blocking failure and review approves it. |
 | **[PhoASR-whisper-small](https://huggingface.co/Qualcomm-AI-Research/PhoASR-whisper-small) -> Storyteller transcription format** | D: Vietnamese-specific Whisper checkpoint with word timestamps through its documented Transformers path. Requires a deterministic adapter to Storyteller's existing transcript/timeline shape. | External-ASR escalation option; do not implement unless justified by observed failure. |
 | **[NVIDIA Parakeet-CTC-0.6B-Vietnamese](https://huggingface.co/nvidia/parakeet-ctc-0.6b-Vietnamese) -> Storyteller transcription format** | D: Vietnamese-specific CTC ASR with character, word, and segment timestamps. Heavier NeMo/PyTorch environment. | Conditional diagnostic option if timing remains the demonstrated blocker. |
@@ -33,33 +33,10 @@ Other Vietnamese ASR adaptations found during the survey remain alternatives onl
 
 ## Source-material implications
 
-The selected audiobook already contains the alignment conditions that matter for feasibility:
-
-- audiobook tracks and EPUB spine documents are not one-to-one;
-- track 1 spans multiple spine documents;
-- the audiobook contains an opening announcement absent from the EPUB;
-- some headings or publication text may be verbalized differently;
-- navigational coverage is not equivalent to synchronization coverage.
-
-These observations are recorded in [source characterization](source-characterization.md) and should not be duplicated as new benchmark categories. They are used in #15 to determine whether a route tolerates ordinary source/audio disagreement without silent repair.
-
-The CTC route uses EPUB reference text explicitly, which is permitted by the protocol for forced alignment. A transcription-driven route, if later approved, must preserve its own recognized text; do not silently substitute EPUB reference text into ASR output.
-
-## What remains for #15
-
-The survey selects the implementation family and first route but does not establish that CTC works on the selected Vietnamese audiobook.
-
-The initial feasibility run should retain enough evidence to inspect:
-
-- whether the route runs reproducibly with the selected EPUB and audiobook;
-- synchronization coverage and unmatched source/audio regions;
-- behavior around the known inserted announcement and cross-document track;
-- timing output and reports needed for protocol evaluation;
-- any required chapter assistance or other human intervention;
-- materially relevant tool/model settings.
-
-No numeric pass threshold is introduced here. If a blocking material failure is observed, retain the failing output and report the failure before changing routes. Route selection, synchronization granularity, benchmark items, timing-error verification procedure, and human-assistance conditions are frozen before the reported #15 evaluation.
+Source-specific alignment conditions are documented in [source characterization](source-characterization.md), and their observed effects are reported in [alignment validation](alignment-validation.md).
+They are not repeated here as additional benchmark categories or route-selection criteria.
+The selected CTC route explicitly uses EPUB reference text, as permitted by the protocol for forced alignment, and no transcription-driven escalation route was needed.
 
 ## Survey conclusion
 
-The survey does not justify a multi-candidate alignment benchmark. Storyteller `stalign` is the selected implementation family, with native CTC as the first route because it is the smallest direct path from audiobook audio and EPUB reference text to alignment output. Other routes remain documented escalation options only when an observed failure creates a specific need.
+Candidate selection is complete. Storyteller `stalign` native CTC is the selected and frozen alignment route because it is the smallest direct path from audiobook audio and EPUB reference text to alignment output. The other routes remain survey context rather than experiment arms; the executed configuration and results belong to #15 and [alignment validation](alignment-validation.md).
