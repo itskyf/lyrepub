@@ -90,9 +90,17 @@ report.
 The opening announcement absent from the EPUB appears as a 0–7.96-second
 audio-only hole. The six unmatched sentences are the Roman-numeral headings
 for sections I and III–VII; section II's heading was marked aligned despite
-being spoken as "Hai." The report also contains a 5.8-second loose-audio hole
-in track 2 at 1093.06–1098.86 seconds. These are reported output states, not
-manually repaired timings. Storyteller's internal scores were not used as an
+being spoken as "Hai." The report also contains a 5.8-second loose-audio
+interval in track 2 at 1093.06–1098.86 seconds. The owner's focused listening
+identified spoken footnote material: approximately "chú thích là năm 1774,
+chú thích của tác giả, hết chú thích." Inspection of the exact `(2)` reference
+in `OEBPS/Text/section_4.html` (source block 103) found
+`<a href="note:" title="1774 (chú thích của tác giả)." class="sup"><sup>(2)</sup></a>`.
+The note body therefore exists in EPUB markup as the reference's `title`
+attribute, but is absent from the narration text used for alignment, which
+contains only `(2)`. The retained marked-up EPUB preserves this structure.
+Correspondence resumes after the spoken insertion without manual repair.
+These are reported output states, not manually repaired timings. Storyteller's internal scores were not used as an
 acceptance criterion.
 
 ### Manual boundary verification
@@ -133,12 +141,13 @@ not change chapter mapping, sentence alignment, or Storyteller output.
 
 The automatic route provides complete section correspondence and sentence
 timings for this source without chapter assistance. Interpolated sentences,
-unmatched headings, and the track-2 audio hole remain limitations for
-synchronization. Focused manual inspection of the track-2 hole is pending: the
-context WAV `track2-loose-audio-1075.5s.wav` spans source-track
-1075.5–1125.9 seconds, with the reported hole at clip-relative
-17.56–23.36 seconds. It is diagnostic context, not an additional benchmark
-boundary. All four starts
+unmatched headings, and the track-2 spoken-footnote insertion remain
+synchronization limitations. The insertion is an explained source/audio
+mismatch, not evidence of unexplained drift or silence. The diagnostic context
+WAV `track2-loose-audio-1075.5s.wav` spans source-track 1075.5–1125.9 seconds,
+with the reported interval at clip-relative 17.56–23.36 seconds; this listening
+added no benchmark boundary and changed no system output. All four starts
 in the fixed, manually verified subset precede the heard boundary by approximately
-0.3, 0.3, 0.4, and 0.5 seconds, respectively. This small subset does not establish general boundary accuracy. The material-blocker conclusion remains pending that listening observation;
-native CTC remains the frozen route under review.
+0.3, 0.3, 0.4, and 0.5 seconds, respectively. This small subset does not
+establish general boundary accuracy. No material blocker was observed for
+this experiment, so native CTC is finalized as the frozen Issue #15 route.
