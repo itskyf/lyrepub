@@ -6,13 +6,13 @@
 
 ## Selection
 
-**VieNeu-TTS v3 Turbo** is selected for the TTS pathway. Its current repository describes v3 Turbo as the latest open-source VieNeu-TTS release, with Vietnamese/English support, 48 kHz output, built-in preset voices, and optional reference voice cloning ([runtime](https://github.com/pnnbao97/VieNeu-TTS), [checkpoint](https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo)). The exact runtime and checkpoint revision used for reported evaluation is frozen in #14.
+**VieNeu-TTS v3 Turbo** is selected for the TTS pathway. Its current repository describes v3 Turbo as the latest open-source VieNeu-TTS release, with Vietnamese/English support, 48 kHz output, built-in preset voices, and optional reference voice cloning ([runtime](https://github.com/pnnbao97/VieNeu-TTS), [checkpoint](https://huggingface.co/pnnbao-ump/VieNeu-TTS-v3-Turbo)). Candidate selection is complete; the exact evaluated configuration and evidence are frozen in #14 and recorded in the [TTS feasibility record](tts-feasibility.md).
 
 The selected narration voice is the built-in preset **`Quỳnh Anh`**, which is present in the current v3 Turbo preset set. This avoids a reference-audio dependency.
 
 The voice decision comes from focused pre-experiment listening, not a scored comparison: the cloned voices tested for this coursework sounded less natural for audiobook narration in **prosody**, particularly speaking rate and pause placement, than the preset voices auditioned. Human review selected `Quỳnh Anh` (female, Northern Vietnamese, storytelling) as the preferred preset; it retains the same main feasibility limitations. This is a project-specific selection rationale, not evidence that preset voices or VieNeu-TTS are generally superior to voice cloning.
 
-No further TTS candidate comparison is planned. Issue #14 checks whether the selected VieNeu-TTS configuration handles the source-derived representative and challenge cases, establishes the publication-usable timing path, records any required preprocessing, and retains unsupported cases for explicit review.
+No further TTS candidate comparison is planned. The completed feasibility review and the frozen configuration evaluated by #14 are recorded in the [TTS feasibility record](tts-feasibility.md).
 
 ## Candidate landscape
 
@@ -34,23 +34,8 @@ The remaining entries preserve decision-relevant survey evidence. They are alter
 | **[MOSS-TTS v1.5](https://huggingface.co/OpenMOSS-Team/MOSS-TTS-v1.5)** | D: Vietnamese multilingual support and long-form claims; larger model/runtime than needed for the selected path. | Reserve only. |
 | **[Gwen-TTS 0.6B](https://huggingface.co/g-group-ai-lab/gwen-tts-0.6B)** | D: Vietnamese-adapted Qwen3-TTS path with presets/reference conditioning. Adaptation-specific behavior still requires its own verification. | Reserve only. |
 
-Other checked Vietnamese adaptations and hosted services do not add a capability needed to justify reopening model selection. They should be revisited only if #14 records a blocking VieNeu-TTS limitation that requires another system.
-
-## What remains for #14
-
-The selected model and voice do not establish source compatibility or publication feasibility. Issue #14 uses the existing source-derived cases rather than inventing a new benchmark:
-
-- ordinary Vietnamese narration;
-- names and foreign proper-name forms;
-- number and date expressions;
-- punctuation and dialogue;
-- long text and synthesis-unit boundaries;
-- the confirmed limited foreign-language material.
-
-For each observed failure, record the output and identify only the smallest justified treatment. Deterministic normalization or backend-specific segmentation may be used when justified and recorded. Do not silently edit or omit authored narratable text, switch TTS systems, or add book-specific exceptions to reusable core processing.
-
-If a blocking case requires another TTS system or a methodological change, retain the failure and review that decision before adding a new route. Exact model/runtime revision, voice, preprocessing, synthesis-unit handling, materially relevant inference settings, and the timing path are frozen before the reported evaluation.
+Other checked Vietnamese adaptations and hosted services do not add a capability needed to justify reopening model selection. They would be revisited only if a blocking VieNeu-TTS limitation required another system.
 
 ## Survey conclusion
 
-The survey no longer supports a broad TTS pilot. VieNeu-TTS v3 Turbo with preset `Quỳnh Anh` is the selected starting configuration. The remaining research question is whether that configuration, with explicitly recorded source-justified processing, is sufficient for the selected books and synchronized publication workflow.
+Candidate selection is complete. VieNeu-TTS v3 Turbo with preset `Quỳnh Anh` is the selected route, with explicitly recorded source-justified processing; this survey remains the selection evidence, and the evaluated configuration belongs to #14 and the [TTS feasibility record](tts-feasibility.md).
