@@ -4,19 +4,16 @@ import hashlib
 import importlib.metadata
 import json
 import logging
-import wave
-from array import array
+import re
 from pathlib import Path
 
 from issue14_feasibility import load_records, ogg_duration, run_tool, save_records
-from sea_g2p import SEAPipeline
+from nemo_text_processing.text_normalization.normalize import Normalizer
+from sea_g2p import G2P
 
 LOGGER = logging.getLogger(__name__)
-IMAGE = (
-    "localhost/audio.cpp@sha256:"
-    "b881a557d10c435690b12894315b33dfeff22a61f833e6c55331f510ce99282d"
-)
-IMAGE_REVISION = "955c8725c611d511774e6be132aff6609163b2d2"
+AUDIOCPP_REVISION = "955c8725c611d511774e6be132aff6609163b2d2"
+NEMO_REVISION = "c3afd14899658d53920b2737ff4d7216d9a32c83"
 CHECKPOINT_REVISION = "61b85e3d937fbbacb387714180e8182823512523"
 CHECKPOINT_SHA256 = "c9c23d51989382e27730077c2373023bcfb0891db63a1efec97fd73b4bd6b7dc"
 VOICE_SHA256 = {
@@ -27,100 +24,44 @@ VOICE_SHA256 = {
         "aae1818cda77c25d6ccd39c64387695b895fa5e85c7b279205fea744fb95a400"
     ),
 }
-SHOUT_SOURCE = "S…át Th.. át!"
-SHOUT_INPUT = "Sát Thát!"
-SAMPLE_RATE = 48_000
-CHANNELS = 2
-SAMPLE_WIDTH = 2
 
 
 def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def chunk_trace(helper: Path, phonemes: str) -> list[dict]:
-    stdout, _ = run_tool([str(helper)], input_text=phonemes)
-    return [
-        {"gap_before": gap, "phonemes": chunk}
-        for gap, chunk in (line.split("\t", 1) for line in stdout.splitlines())
-    ]
-
-
-def joined_chunk_times(wav: Path, dump: Path, chunk_count: int) -> list[float]:
-    """Locate audio.cpp's zero-padded seams from generated frame counts."""
-    frames = [
-        int(line.split()[1])
-        for line in dump.read_text().splitlines()
-        if line.startswith("generated_codes ")
-    ]
-    if len(frames) != chunk_count:
-        message = f"audio.cpp synthesized {len(frames)} chunks; traced {chunk_count}"
-        raise RuntimeError(message)
-    with wave.open(str(wav)) as audio:
-        if (
-            audio.getframerate() != SAMPLE_RATE
-            or audio.getnchannels() != CHANNELS
-            or audio.getsampwidth() != SAMPLE_WIDTH
-        ):
-            message = "unexpected audio.cpp WAV format"
-            raise RuntimeError(message)
-        samples = array("h", audio.readframes(audio.getnframes()))
-        total = audio.getnframes()
-    position = 0
-    joins = []
-    for frame_count in frames[:-1]:
-        position += frame_count * 3840
-        while (
-            position < total and samples[2 * position] == samples[2 * position + 1] == 0
-        ):
-            position += 1
-        joins.append(position / SAMPLE_RATE)
-    if position + frames[-1] * 3840 != total:
-        message = "chunk frame and WAV timeline differ"
-        raise RuntimeError(message)
-    return joins
-
-
 def synthesize(
-    output: Path, model: Path, voice_dir: Path, chunk_helper: Path, image: str = IMAGE
+    output: Path,
+    model: Path,
+    voice_dir: Path,
+    image: str,
 ) -> None:
-    """Synthesize prepared cases, retaining source, frontend, and chunk evidence."""
+    """Synthesize prepared cases with separate preprocessing and runtime evidence."""
     model = model.resolve()
     voice_dir = voice_dir.resolve()
     output = output.resolve()
-    required = validate_inputs(model, voice_dir, chunk_helper)
+    image_info = inspect_image(image)
+    required = validate_inputs(model, voice_dir)
     output.joinpath("audio").mkdir(parents=True, exist_ok=True)
     output.joinpath("traces").mkdir(exist_ok=True)
-    settings = runtime_settings(model, required, image)
+    settings = runtime_settings(model, required, image_info)
     output.joinpath("runtime.json").write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
     records = load_records(output)
-    frontend = SEAPipeline(lang="vi")
-    for record in records:
-        source_text = record["source"]["text"]
-        text_input = source_text
-        if record["key"] == "s17-b135":
-            if source_text.count(SHOUT_SOURCE) != 1:
-                message = "expected one elongated Sát Thát cry"
-                raise ValueError(message)
-            text_input = source_text.replace(SHOUT_SOURCE, SHOUT_INPUT)
-            record["intervention"] = {
-                "type": "TTS input only",
-                "source": SHOUT_SOURCE,
-                "replacement": SHOUT_INPUT,
-            }
+    selected = [record for record in records if record.get("status") != "ok"]
+    normalizer = Normalizer(input_case="cased", lang="vi", deterministic=True)
+    phonemizer = G2P(lang="vi")
+    for record in selected:
+        text_input = record.get("tts_input", record["source"]["text"])
         record["tts_input"] = text_input
         try:
-            normalized = frontend.normalizer.normalize(text_input, punc_norm=False)
-            phonemes = frontend.g2p.convert(normalized)
-            chunks = chunk_trace(chunk_helper, phonemes)
-            if not chunks:
-                message = "audio.cpp produced no synthesis chunks"
+            normalized, phonemes = preprocess(text_input, normalizer, phonemizer)
+            if not normalized.strip() or not phonemes.strip():
+                message = "preprocessing produced empty input"
                 raise ValueError(message)
             record["phonemes"] = phonemes
             record["normalized_text"] = normalized
-            record["chunks"] = chunks
             record["status"] = "preprocessed"
             save_records(output, records)
             seed = (
@@ -139,10 +80,55 @@ def synthesize(
             record["error"] = f"{type(exc).__name__}: {exc}"
         save_records(output, records)
         LOGGER.info("%s: %s", record["key"], record["status"])
-    listening_clips(output, records)
 
 
-def validate_inputs(model: Path, voice_dir: Path, chunk_helper: Path) -> list[Path]:
+def preprocess(text: str, normalizer: Normalizer, phonemizer: G2P) -> tuple[str, str]:
+    """Apply only NeMo Vietnamese TN, then SEA-G2P phonemization."""
+    normalized = normalizer.normalize(
+        text, verbose=False, punct_pre_process=False, punct_post_process=False
+    )
+    return normalized, phonemizer.convert(normalized, punc_norm=False)
+
+
+def add_variants(records: list[dict], path: Path) -> None:
+    """Add explicit experimental inputs without changing baseline records."""
+    for variant in json.loads(path.read_text(encoding="utf-8")):
+        if not re.fullmatch(r"[a-z0-9-]+", variant["key"]) or not isinstance(
+            variant["tts_input"], str
+        ):
+            message = "variant requires a safe artifact key and explicit text input"
+            raise ValueError(message)
+        baseline = next(r for r in records if r["key"] == variant["variant_of"])
+        if baseline.get("status") != "ok" or any(
+            r["key"] == variant["key"] for r in records
+        ):
+            message = "variant requires completed baseline and a distinct unused key"
+            raise ValueError(message)
+        record = {
+            **variant,
+            "source": baseline["source"],
+            "case": False,
+            "playback": False,
+        }
+        records.append(record)
+
+
+def inspect_image(image: str) -> dict:
+    stdout, _ = run_tool(["podman", "image", "inspect", image])
+    metadata = json.loads(stdout)[0]
+    revision = metadata["Config"]["Labels"]["org.opencontainers.image.revision"]
+    if revision != AUDIOCPP_REVISION:
+        message = "audio.cpp image revision differs from the feasibility pin"
+        raise ValueError(message)
+    return {
+        "input": image,
+        "id": metadata["Id"],
+        "repo_digests": metadata["RepoDigests"],
+        "revision": revision,
+    }
+
+
+def validate_inputs(model: Path, voice_dir: Path) -> list[Path]:
     required = [model, voice_dir / "ref_codes.txt", voice_dir / "speaker.emb.txt"]
     if any(not path.is_file() for path in required):
         message = f"missing audio.cpp model or Thục Đoan assets: {required}"
@@ -155,17 +141,21 @@ def validate_inputs(model: Path, voice_dir: Path, chunk_helper: Path) -> list[Pa
     if importlib.metadata.version("sea-g2p") != "0.9.1":
         message = "this feasibility run requires sea-g2p 0.9.1"
         raise ValueError(message)
-    if not chunk_helper.is_file():
-        message = f"missing pinned audio.cpp chunk helper: {chunk_helper}"
-        raise FileNotFoundError(message)
+    nemo_url = json.loads(
+        importlib.metadata.distribution("nemo-text-processing").read_text(
+            "direct_url.json"
+        )
+    )
+    if nemo_url["vcs_info"]["commit_id"] != NEMO_REVISION:
+        message = "NeMo Vietnamese TN differs from the repository pin"
+        raise ValueError(message)
     return required
 
 
-def runtime_settings(model: Path, required: list[Path], image: str) -> dict:
+def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
     return {
         "runtime": "audio.cpp",
         "image": image,
-        "image_revision": IMAGE_REVISION,
         "checkpoint": f"pnnbao-ump/VieNeu-TTS-v3-Turbo@{CHECKPOINT_REVISION}",
         "checkpoint_precision": "BF16 talker, F16 codec",
         "checkpoint_sha256": sha256(model),
@@ -173,8 +163,18 @@ def runtime_settings(model: Path, required: list[Path], image: str) -> dict:
         "voice_assets_sha256": {path.name: sha256(path) for path in required[1:]},
         "frontend": (
             f"sea-g2p {importlib.metadata.version('sea-g2p')} "
-            "SEAPipeline(vi), punc_norm=False"
+            "G2P(vi), phonemization only, punc_norm=False"
         ),
+        "normalization": {
+            "package": "nemo-text-processing",
+            "revision": NEMO_REVISION,
+            "lang": "vi",
+            "input_case": "cased",
+            "deterministic": True,
+            "post_process": True,
+            "punct_pre_process": False,
+            "punct_post_process": False,
+        },
         "backend": "cuda",
         "seed_per_block": "14 + source spine index * 1000 + block index",
         "sampling": {
@@ -191,7 +191,6 @@ def runtime_settings(model: Path, required: list[Path], image: str) -> dict:
         "audio_cpp_chunking": {
             "text_chunk_size": 200,
             "text_chunk_min": 20,
-            "budget_units": "UTF-8 bytes of phonemes in the pinned C++ implementation",
         },
         "audio_cpp_minimum_pauses_seconds": {
             "paragraph": 0.7,
@@ -206,10 +205,7 @@ def run_audio_cpp(
 ) -> None:
     """Generate and package one already-phonemized source target."""
     phonemes = record["phonemes"]
-    chunks = record["chunks"]
     seed = record["seed"]
-    dump = output / "traces" / f"{record['key']}.codes"
-    dump.unlink(missing_ok=True)
     name = record["key"]
     command = [
         "podman",
@@ -237,6 +233,7 @@ def run_audio_cpp(
         "/inputs/model.gguf",
         "--backend",
         "cuda",
+        "--log",
         "--text",
         phonemes,
         "--seed",
@@ -245,8 +242,6 @@ def run_audio_cpp(
         "reference_codes_file=/inputs/voice/ref_codes.txt",
         "--request-option",
         "speaker_embedding_file=/inputs/voice/speaker.emb.txt",
-        "--request-option",
-        f"codes_dump_file=/output/traces/{name}.codes",
         "--out",
         f"/output/audio/{name}.wav",
     ]
@@ -262,7 +257,6 @@ def run_audio_cpp(
     if not wav.is_file() or wav.stat().st_size == 0:
         message = "audio.cpp returned no audio"
         raise RuntimeError(message)
-    record["join_seconds"] = joined_chunk_times(wav, dump, len(chunks))
     ogg = output / "audio" / f"{name}.ogg"
     run_tool(
         [
@@ -286,47 +280,3 @@ def run_audio_cpp(
     record["packaged_audio"] = f"audio/{name}.ogg"
     record["duration_seconds"] = str(ogg_duration(ogg))
     record["status"] = "ok"
-
-
-def listening_clips(output: Path, records: list[dict]) -> None:
-    """Make short listening excerpts at measured long-block synthesis seams."""
-    record = next(r for r in records if r["key"] == "s5-b9")
-    if record.get("status") != "ok":
-        return
-    output.joinpath("joins").mkdir(exist_ok=True)
-    clips = []
-    for index in (0, len(record["join_seconds"]) // 2, len(record["join_seconds"]) - 1):
-        seam = record["join_seconds"][index]
-        start = max(0, seam - 4)
-        end = min(float(record["duration_seconds"]), seam + 4)
-        filename = f"joins/s5-b9-join-{index + 1:02}.ogg"
-        run_tool(
-            [
-                "ffmpeg",
-                "-v",
-                "error",
-                "-y",
-                "-ss",
-                str(start),
-                "-i",
-                str(output / record["packaged_audio"]),
-                "-t",
-                str(end - start),
-                "-c:a",
-                "libopus",
-                "-b:a",
-                "96k",
-                str(output / filename),
-            ]
-        )
-        clips.append(
-            {
-                "path": filename,
-                "start_seconds": start,
-                "end_seconds": end,
-                "join_seconds": seam,
-            }
-        )
-    output.joinpath("clips.json").write_text(
-        json.dumps(clips, indent=2) + "\n", encoding="utf-8"
-    )

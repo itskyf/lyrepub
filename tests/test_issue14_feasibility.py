@@ -85,6 +85,24 @@ def test_packaged_opus_bounds_and_duration_metadata(
     publish(output, source)
     with ZipFile(output / "feasibility.epub") as archive:
         package = DefusedET.fromstring(archive.read("EPUB/package.opf"))
+        metadata = package.findall(f".//{{{OPF}}}meta")
+        assert [
+            m.text for m in metadata if m.get("property") == "schema:accessMode"
+        ] == ["textual"]
+        for prop, expected in (
+            ("schema:accessModeSufficient", "textual"),
+            ("schema:accessibilityFeature", "synchronizedAudioText"),
+            ("schema:accessibilityHazard", "none"),
+        ):
+            assert [m.text for m in metadata if m.get("property") == prop] == [expected]
+        summary = next(
+            m.text
+            for m in metadata
+            if m.get("property") == "schema:accessibilitySummary"
+        )
+        assert summary
+        assert "feasibility excerpt" in summary
+        assert "human review" in summary
         items = package.findall(f".//{{{OPF}}}item")
         audio_items = [i for i in items if i.get("href", "").endswith(".ogg")]
         assert len(audio_items) == len(PLAYBACK)

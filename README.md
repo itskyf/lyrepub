@@ -76,6 +76,16 @@ Agent packages declared in `apm.yml` are installed with [APM](https://microsoft.
 apm install
 ```
 
+## Validator Images
+
+```sh
+mkdir -p data/validator-images
+docker buildx create --name lyrepub-validators --driver docker-container
+docker buildx bake --builder lyrepub-validators --pull validators
+podman load --input data/validator-images/epubcheck-5.4.0.tar
+podman load --input data/validator-images/ace-1.4.6.tar
+```
+
 ## Repository Map
 
 - `docs/research/protocol.md`: Canonical research scope, questions, methodology, experiments, and evaluation

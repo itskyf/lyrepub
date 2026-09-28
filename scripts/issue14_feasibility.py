@@ -49,22 +49,16 @@ EPUB = "http://www.idpf.org/2007/ops"
 LOGGER = logging.getLogger(__name__)
 
 
-def run_tool(command: list[str], input_text: str | None = None) -> tuple[str, str]:
+def run_tool(command: list[str]) -> tuple[str, str]:
     """Run a local tool without a shell, capturing stdout and stderr."""
     with (
-        tempfile.TemporaryFile() as stdin,
         tempfile.TemporaryFile() as stdout,
         tempfile.TemporaryFile() as stderr,
     ):
-        if input_text is not None:
-            stdin.write(input_text.encode())
-            stdin.seek(0)
         actions = [
             (os.POSIX_SPAWN_DUP2, stdout.fileno(), 1),
             (os.POSIX_SPAWN_DUP2, stderr.fileno(), 2),
         ]
-        if input_text is not None:
-            actions.append((os.POSIX_SPAWN_DUP2, stdin.fileno(), 0))
         pid = os.posix_spawnp(command[0], command, os.environ, file_actions=actions)
         _, status = os.waitpid(pid, 0)
         stdout.seek(0)
@@ -302,7 +296,6 @@ def publish(output: Path, source: Path) -> None:
     ).text = f"{duration_total:.3f}s"
     for prop, value in (
         ("schema:accessMode", "textual"),
-        ("schema:accessMode", "auditory"),
         ("schema:accessModeSufficient", "textual"),
         ("schema:accessibilityFeature", "synchronizedAudioText"),
         ("schema:accessibilityHazard", "none"),
@@ -414,17 +407,26 @@ def main() -> None:
     parser.add_argument("--source-epub", type=Path)
     parser.add_argument("--model", type=Path)
     parser.add_argument("--voice-dir", type=Path)
-    parser.add_argument("--chunk-helper", type=Path)
+    parser.add_argument("--image")
+    parser.add_argument("--variants", type=Path)
     args = parser.parse_args()
     if args.step in {"prepare", "publish"} and args.source_epub is None:
         parser.error("--source-epub is required")
     if args.step == "prepare":
         prepare(args.output, args.source_epub)
     elif args.step == "synthesize":
-        if any(v is None for v in (args.model, args.voice_dir, args.chunk_helper)):
-            parser.error("synthesize requires --model, --voice-dir, --chunk-helper")
-        importlib.import_module("issue14_synthesis").synthesize(
-            args.output, args.model, args.voice_dir, args.chunk_helper
+        if any(v is None for v in (args.model, args.voice_dir, args.image)):
+            parser.error("synthesize requires --model, --voice-dir, --image")
+        synthesis = importlib.import_module("issue14_synthesis")
+        if args.variants:
+            records = load_records(args.output)
+            synthesis.add_variants(records, args.variants)
+            save_records(args.output, records)
+        synthesis.synthesize(
+            args.output,
+            args.model,
+            args.voice_dir,
+            args.image,
         )
     else:
         publish(args.output, args.source_epub)

@@ -1,0 +1,13 @@
+[
+  {
+    "key": "s17-b135-treated",
+    "variant_of": "s17-b135",
+    "tts_input": "Tiếng \"Sát Thát!\u201d thét vang trời. Dường như cả Thăng Long: Sát Thát! Sát Thát! Sát Thát!... Dường như cả Thăng Long nổi giận!",
+    "intervention": {
+      "type": "TTS input only",
+      "source": "S…át Th.. át!",
+      "replacement": "Sát Thát!",
+      "reason": "Raw baseline phonemization spells S and Th as English letter names; nearby context identifies the repeated Sát Thát battle cry. Review loss of written elongation."
+    }
+  }
+]
