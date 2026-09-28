@@ -53,12 +53,9 @@ Both hashes are verified before synthesis, with no default-voice fallback.
   identical** to the previous records. Runtime metadata records the revision,
   not a machine-local cache path.
 - audio.cpp `vieneu_v3_turbo`, explicit **CUDA**, revision
-  `955c8725c611d511774e6be132aff6609163b2d2`; image ID
-  `dcce293dbad74015a269b9d75577050372ce2743e948c4d817f11165f6556a02`.
-  The image argument, ID, repository digests, and OCI revision are recorded.
-  CLI version reports `dev`, Release/GCC 14.2.0, `cpu,cuda`; its embedded Git
-  revision is `unknown`, so source revision verification uses the OCI label,
-  while the exact image ID identifies the binary actually used.
+  `955c8725c611d511774e6be132aff6609163b2d2`; the OCI revision is verified
+  before synthesis. CLI version reports `dev`, Release/GCC 14.2.0,
+  `cpu,cuda`.
 - Checkpoint `pnnbao-ump/VieNeu-TTS-v3-Turbo`, revision
   `61b85e3d937fbbacb387714180e8182823512523`;
   `vieneu-v3-turbo-bf16.gguf`, BF16 talker/F16 codec, SHA-256
@@ -79,9 +76,7 @@ Both hashes are verified before synthesis, with no default-voice fallback.
   `join_audio_chunks(..., silence_ps=gaps_to_silence(gaps))`: paragraph/sentence/
   minor minimum gaps remain 0.70/0.50/0.30 s. No custom pause/edge heuristic.
   The runtime decoder emits stereo; average its two PCM channels to mono for
-  the upstream mono join interface (matching native pause measurement), without
-  gain changes. The supplementary full-block listening file joins sentence PCM
-  with the upstream sentence gap, 0.50 s; it is not the publication timing input.
+  the upstream mono join interface, without gain changes.
 - FFmpeg/FFprobe 9.0.2; Ogg Opus via `libopus`, 96 kb/s; duration measured
   from final Ogg and rounded consistently to milliseconds.
 
@@ -166,14 +161,11 @@ stronger/extended cry indicated by typography remains an
 
 ## Number-stutter root cause and semantic-chunking fix
 
-Human listening on the preceding revision found intra-number stutters in `1256`
-(`s5-b26`, "một nghìn hai ... trăm năm mươi sáu") and `1284` (`s15-b17`,
-"một nghìn ... hai trăm tám mươi tư"). A temporary upstream CLI diagnostic at
-the pinned revision printed the existing `split_phoneme_chunks` result for only
-these two cases, then stopped before synthesis (host CPU, text splitting only;
-no backend comparison or custom splitter; diagnostic source, build, and full
-logs removed). The two relevant boundary pairs are retained in
-`number-boundary-diagnostic.json`.
+Human listening found intra-number stutters in `1256` (`s5-b26`,
+"một nghìn hai ... trăm năm mươi sáu") and `1284` (`s15-b17`,
+"một nghìn ... hai trăm tám mươi tư"). The retained
+`number-boundary-diagnostic.json` records the two relevant upstream
+`split_phoneme_chunks` boundary pairs.
 
 Both diagnosed boundaries fell at **199-byte** chunks where the upstream
 whitespace fallback splits inside the normalized number phrase — `s5-b26`:
@@ -271,28 +263,21 @@ not become Media Overlay targets. No ASR/forced alignment is needed for this
 arrangement. Audio uses the exact MIME `audio/ogg; codecs=opus` supported by
 the generic timing-to-Media-Overlay publisher merged in #33.
 
-Issue #16 owns publication-facing sentence-addressable XHTML targeting/markup.
-It will map the frozen sentence/timing records to addressable `text_href`
-values; the existing #16 `Timing` contract (`text_href`, `audio_href`,
-`clip_begin`, `clip_end`) can carry these ranges, and #16 can consume
-`packaged_audio` and the final sentence intervals from the evidence below.
-Issue #14 stops at reviewed sentence source identities/offsets, TTS
-preparation, synthesis units and reproducible final Opus sentence intervals.
-No spans, IDs, targeting changes or generic publisher changes are made here.
+Issue #16 owns publication-facing sentence-addressable XHTML targeting and will
+map these frozen sentence source identities/offsets and final Opus intervals to
+addressable XHTML targets. The generic publisher merged in #33 consumes the
+resulting timings. Issue #14 stops at the reviewed sentence identities,
+synthesis units, and reproducible final Opus intervals.
 
-The unchanged diagnostic EPUB (reused images, no rebuild) passes
-**EPUBCheck 5.4.0** with zero errors/warnings and **Ace 1.4.6** with no issues;
-metadata declares textual access/sufficiency, synchronizedAudioText, no
-hazards, and a truthful summary of the rejected paragraph granularity, with no
-accessibility conformance claim. These validator results apply only to that
-historical diagnostic artifact.
+The paragraph diagnostic used for the granularity decision passed EPUBCheck
+5.4.0 and Ace 1.4.6. Those validator results apply only to that diagnostic
+artifact, not to the final publication.
 
 ## Reproduction and retained evidence
 
-Find the main worktree with `git worktree list`; read its source EPUB directly.
-Set `SOURCE_EPUB`, `MODEL_GGUF`, `VOICE_DIR` (verified Quỳnh Anh assets), and
-`AUDIOCPP_IMAGE` as runtime inputs. Full reproduction uses an unused output
-directory, separately from the review artifacts:
+Set `SOURCE_EPUB`, `MODEL_GGUF`, `VOICE_DIR` (verified Quỳnh Anh assets),
+and `AUDIOCPP_IMAGE` as runtime inputs. Full reproduction uses an unused output
+directory, separately from retained evidence:
 
 ```sh
 OUT=data/issue-14-final-frontend-reproduction
@@ -311,9 +296,7 @@ verified. Actual pins/settings are in `runtime.json`; exact normalized outputs,
 phonemes, requests and final timings are in `cases.json` and
 `frontend-comparison.json`. Intermediate WAV/log references in the records
 describe historical execution; those files are intentionally not copied.
-Per-case/sentence/chunk audio and log names use comma-separated `key=value`
-components, with three-digit sentence and two-digit chunk indexes. Sentence
-indexes identify logical source targets, not XHTML IDs.
+Sentence indexes identify logical source targets, not XHTML IDs.
 
 Two unique earlier artifacts are retained alongside them:
 `number-boundary-diagnostic.json` (the two stutter boundary pairs) and
