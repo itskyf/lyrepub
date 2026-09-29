@@ -81,10 +81,11 @@ apm install
 The Compose provider is managed with mise. Podman and NVIDIA CDI remain host prerequisites.
 
 ```shell
-mkdir -p data/models
+mkdir --parents data/models
+podman compose build audiocpp
 podman compose --profile tools run --rm model-manager list --remote
 podman compose --profile tools run --rm model-manager install <package-id> --models-dir /app/models
-podman compose up --build audiocpp
+podman compose up audiocpp
 ```
 
 The WebUI is available at `http://127.0.0.1:8080`.
@@ -92,7 +93,7 @@ The WebUI is available at `http://127.0.0.1:8080`.
 ## Validator Images
 
 ```sh
-mkdir -p data/validator-images
+mkdir --parents data/validator-images
 docker buildx create --name lyrepub-validators --driver docker-container
 docker buildx bake --builder lyrepub-validators --pull validators
 podman load --input data/validator-images/epubcheck-5.4.0.tar
