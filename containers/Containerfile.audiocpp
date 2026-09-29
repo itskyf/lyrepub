@@ -1,4 +1,4 @@
-FROM ghcr.io/0xshug0/audio.cpp:full-cuda13
+FROM ghcr.io/0xshug0/audio.cpp:full-cuda13-20260928-f99bd1e
 
 USER root
 
