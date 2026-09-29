@@ -1,0 +1,72 @@
+x-audiocpp-build: &audiocpp-build
+  context: .
+  dockerfile: containers/Containerfile.audiocpp
+
+services:
+  audiocpp:
+    build:
+      <<: *audiocpp-build
+      target: server
+
+    userns_mode: "keep-id:uid=1000,gid=1000"
+
+    devices:
+      - nvidia.com/gpu=all
+
+    ports:
+      - target: 8080
+        published: "8080"
+        host_ip: 127.0.0.1
+        protocol: tcp
+
+    volumes:
+      - type: bind
+        source: ./data/models
+        target: /app/models
+        read_only: true
+        bind:
+          create_host_path: false
+          selinux: z
+
+    command: [server, --ui, --host, 0.0.0.0, --port, "8080", --backend, cuda]
+
+    healthcheck:
+      test: [CMD, curl, --fail, --silent, --show-error, --output, /dev/null, http://127.0.0.1:8080/health]
+      start_period: 60s # audio.cpp's readiness helper allows up to 60s for startup.
+      start_interval: 1s # audio.cpp's readiness helper polls once per second.
+
+  model-manager:
+    build:
+      <<: *audiocpp-build
+      target: base
+
+    profiles:
+      - tools
+
+    userns_mode: "keep-id:uid=1000,gid=1000"
+
+    volumes:
+      - type: bind
+        source: ./data/models
+        target: /app/models
+        bind:
+          create_host_path: false
+          selinux: z
+
+    entrypoint: [/app/entrypoint.sh, model-manager]
+
+  epubcheck:
+    build:
+      context: https://github.com/w3c/epubcheck.git#a51f751b986ac424488586aae75c43d047bbdc53
+      dockerfile: Dockerfile
+
+    profiles:
+      - tools
+
+  ace:
+    build:
+      context: containers
+      dockerfile: Containerfile.ace
+
+    profiles:
+      - tools

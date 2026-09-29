@@ -76,14 +76,28 @@ Agent packages declared in `apm.yml` are installed with [APM](https://microsoft.
 apm install
 ```
 
-## Validator Images
+## Containers
 
-```sh
-mkdir -p data/validator-images
-docker buildx create --name lyrepub-validators --driver docker-container
-docker buildx bake --builder lyrepub-validators --pull validators
-podman load --input data/validator-images/epubcheck-5.4.0.tar
-podman load --input data/validator-images/ace-1.4.6.tar
+### audio.cpp
+
+The Compose provider is managed with mise. Podman and NVIDIA CDI remain host prerequisites.
+
+```shell
+mkdir --parents data/models
+podman compose build audiocpp model-manager
+podman compose run --rm model-manager list --remote
+podman compose run --rm model-manager install <package-id> --models-dir /app/models
+podman compose up audiocpp
+```
+
+The WebUI is available at `http://127.0.0.1:8080`.
+
+### Validators
+
+EPUBCheck and Ace are available as Compose tools:
+
+```shell
+podman compose build epubcheck ace
 ```
 
 ## Repository Map
