@@ -50,7 +50,12 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def synthesize(output: Path, model: Path, voice_dir: Path, image: str) -> None:
+def synthesize(
+    output: Path,
+    model: Path,
+    voice_dir: Path,
+    image: str,
+) -> None:
     """Synthesize prepared cases with separate preprocessing and runtime evidence."""
     model = model.resolve()
     voice_dir = voice_dir.resolve()

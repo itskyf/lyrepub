@@ -79,8 +79,6 @@ These are qualitative listening observations, not scores.
 | `s17-b135` | The corrected lexical pronunciation was accepted; the raw frontend failure and expressive-shout limitation remain recorded. |
 | `s18-b35` | Reviewed transliteration plus original-name material was acceptable; both forms are authored source content. |
 
-All nine cases completed preprocessing, synthesis, and Opus packaging without runtime exceptions.
-
 ## Reported evaluation
 
 The frozen configuration was run unchanged on the nine benchmark cases into `data/silver/issue-14-reported/`.

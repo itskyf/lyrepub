@@ -193,7 +193,12 @@ def main() -> None:
         if any(v is None for v in (args.model, args.voice_dir, args.image)):
             parser.error("synthesize requires --model, --voice-dir, --image")
         synthesis = importlib.import_module("scripts.issue14_synthesis")
-        synthesis.synthesize(args.output, args.model, args.voice_dir, args.image)
+        synthesis.synthesize(
+            args.output,
+            args.model,
+            args.voice_dir,
+            args.image,
+        )
 
 
 if __name__ == "__main__":
