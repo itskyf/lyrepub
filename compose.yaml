@@ -1,9 +1,12 @@
+x-audiocpp-build: &audiocpp-build
+  context: .
+  dockerfile: containers/Containerfile.audiocpp
+
 services:
   audiocpp:
     build:
-      context: .
-      dockerfile: containers/Containerfile.audiocpp
-    image: localhost/audio.cpp:full-cuda13
+      <<: *audiocpp-build
+      target: server
 
     userns_mode: "keep-id:uid=1000,gid=1000"
 
@@ -33,8 +36,9 @@ services:
       start_interval: 1s # audio.cpp's readiness helper polls once per second.
 
   model-manager:
-    image: localhost/audio.cpp:full-cuda13
-    pull_policy: never
+    build:
+      <<: *audiocpp-build
+      target: base
 
     profiles:
       - tools

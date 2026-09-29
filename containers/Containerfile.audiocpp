@@ -1,4 +1,6 @@
-FROM ghcr.io/0xshug0/audio.cpp:full-cuda13-20260928-f99bd1e@sha256:ac4068bc9160f32b57ed6769823b82f44ab1963b1581c8462173f4e11fa6a3ed
+FROM ghcr.io/0xshug0/audio.cpp:full-cuda13-20260928-f99bd1e@sha256:ac4068bc9160f32b57ed6769823b82f44ab1963b1581c8462173f4e11fa6a3ed AS base
+
+FROM base AS server
 
 USER root
 

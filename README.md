@@ -82,9 +82,9 @@ The Compose provider is managed with mise. Podman and NVIDIA CDI remain host pre
 
 ```shell
 mkdir --parents data/models
-podman compose build audiocpp
-podman compose --profile tools run --rm model-manager list --remote
-podman compose --profile tools run --rm model-manager install <package-id> --models-dir /app/models
+podman compose build audiocpp model-manager
+podman compose run --rm model-manager list --remote
+podman compose run --rm model-manager install <package-id> --models-dir /app/models
 podman compose up audiocpp
 ```
 
