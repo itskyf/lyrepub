@@ -85,11 +85,6 @@ def synthesize(
                     f"manual TTS normalization: {manual['source_span']} "
                     f"-> {manual['tts_text']}"
                 )
-            record["tts_input"] = (
-                text_input.replace(manual["source_span"], manual["tts_text"])
-                if manual
-                else text_input
-            )
             record["sentences"] = prepare_sentences(
                 record["source"]["text"],
                 text_input,
@@ -157,7 +152,7 @@ def prepare_sentences(
             manual_applied = True
         chunks, gaps = normalize_to_chunks_v3_with_gaps(prepared)
         if not chunks or any(not chunk.strip() for chunk in chunks):
-            message = "frontend produced empty synthesis input"
+            message = f"frontend produced empty synthesis input: {sentence!r}"
             raise ValueError(message)
         result.append(
             {
@@ -290,19 +285,11 @@ def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
     }
 
 
-def run_audio_cpp(
-    output: Path, model: Path, voice_dir: Path, image: str, record: dict
-) -> None:
-    """Synthesize one upstream-prepared phoneme chunk without a second split."""
-    phonemes = record["phonemes"]
-    if not phonemes.strip() or "\n" in phonemes:
-        message = "prepared request must contain one nonempty phoneme paragraph"
-        raise ValueError(message)
-    # The runtime repacks punctuation pieces within this byte budget.
-    record["text_chunk_size_bytes"] = len(phonemes.encode("utf-8"))
-    seed = record["seed"]
-    name = record["key"]
-    command = [
+def audio_cpp_command(
+    output: Path, model: Path, voice_dir: Path, image: str
+) -> list[str]:
+    """Use the frozen CUDA image and voice assets for native CLI requests."""
+    return [
         "podman",
         "run",
         "--rm",
@@ -329,6 +316,23 @@ def run_audio_cpp(
         "--backend",
         "cuda",
         "--log",
+    ]
+
+
+def run_audio_cpp(
+    output: Path, model: Path, voice_dir: Path, image: str, record: dict
+) -> None:
+    """Synthesize one upstream-prepared phoneme chunk without a second split."""
+    phonemes = record["phonemes"]
+    if not phonemes.strip() or "\n" in phonemes:
+        message = "prepared request must contain one nonempty phoneme paragraph"
+        raise ValueError(message)
+    # The runtime repacks punctuation pieces within this byte budget.
+    record["text_chunk_size_bytes"] = len(phonemes.encode("utf-8"))
+    seed = record["seed"]
+    name = record["key"]
+    command = [
+        *audio_cpp_command(output, model, voice_dir, image),
         "--text",
         phonemes,
         "--seed",
