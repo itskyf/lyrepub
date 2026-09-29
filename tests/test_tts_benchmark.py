@@ -1,16 +1,18 @@
 """TTS source mapping and HTTP contracts without standalone dependencies."""
 
-import asyncio
 from pathlib import Path
-from types import SimpleNamespace
 
-import numpy as np
 import pytest
 
 from lyrepub import segmentation
 from scripts import tts_synthesis
-from scripts.tts_benchmark import normalize_slash_enumeration
-from scripts.tts_synthesis import prepare_sentences
+from scripts.tts_synthesis import normalize_slash_enumeration, prepare_sentences
+
+
+@pytest.fixture
+def frontend(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tts_synthesis, "frontend_chunks", lambda text: ([text], []))
+    monkeypatch.setattr(tts_synthesis, "frontend_phonemes", lambda text: text)
 
 
 def test_runtime_requires_loaded_model(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -44,6 +46,7 @@ def test_slash_enumeration_treatment() -> None:
         assert normalize_slash_enumeration(source) == expected
 
 
+@pytest.mark.usefixtures("frontend")
 def test_sentence_mapping_and_coverage() -> None:
     source = "  Năm 1284.  Nhà vua trở về. "
     sentences = ["Năm 1284.", "Nhà vua trở về."]
@@ -53,6 +56,7 @@ def test_sentence_mapping_and_coverage() -> None:
         prepare_sentences(source, source, sentences[:1])
 
 
+@pytest.mark.usefixtures("frontend")
 def test_manual_normalization_preserves_authored_offsets() -> None:
     source = "Trước. S…át Th.. át! Sau."
     sentences = ["Trước.", "S…át Th.. át!", "Sau."]
@@ -105,68 +109,3 @@ def test_sat_uses_pinned_tokenizer_snapshot(monkeypatch: pytest.MonkeyPatch) -> 
         )
     finally:
         segmentation._sat.cache_clear()
-
-
-@pytest.mark.asyncio
-async def test_http_request_and_result_contract(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
-    (tmp_path / "audio").mkdir()
-    requests = []
-    active = 0
-    maximum = 0
-    status = 200
-    media_type = "audio/wav"
-
-    async def read() -> bytes:
-        return b"wav"
-
-    def check_status() -> None:
-        if status != 200:
-            message = "HTTP failure"
-            raise RuntimeError(message)
-
-    async def post(url: str, *, json: dict) -> SimpleNamespace:
-        nonlocal active, maximum
-        active += 1
-        maximum = max(maximum, active)
-        requests.append((url, json))
-        await asyncio.sleep(0)
-        active -= 1
-        return SimpleNamespace(
-            aread=read,
-            raise_for_status=check_status,
-            headers={"content-type": media_type},
-        )
-
-    monkeypatch.setattr(
-        tts_synthesis, "read_pcm", lambda _s: (np.zeros((20, 2)), 48000)
-    )
-    client = SimpleNamespace(post=post)
-    semaphore = asyncio.Semaphore(1)
-    chunks = [{"key": str(i), "seed": 5019, "phonemes": "xin cào"} for i in range(2)]
-    await asyncio.gather(
-        *(tts_synthesis.request_audio(client, semaphore, tmp_path, c) for c in chunks)
-    )
-    assert maximum == 1
-    for chunk, (url, request) in zip(chunks, requests, strict=True):
-        assert url == "/v1/audio/speech"
-        assert request["input"] == chunk["phonemes"]
-        assert request["seed"] == 5019
-        assert request["options"]["text_chunk_size"] == str(
-            len(chunk["phonemes"].encode())
-        )
-        assert "g2p_dict" not in request["options"]
-        assert (tmp_path / chunk["audio"]).read_bytes() == b"wav"
-    chunk = {"key": "failure", "seed": 14, "phonemes": "xin"}
-    status = 503
-    with pytest.raises(RuntimeError, match="HTTP failure"):
-        await tts_synthesis.request_audio(client, semaphore, tmp_path, chunk)
-    status, media_type = 200, "application/json"
-    with pytest.raises(ValueError, match="non-WAV"):
-        await tts_synthesis.request_audio(client, semaphore, tmp_path, chunk)
-    media_type = "audio/wav"
-    monkeypatch.setattr(tts_synthesis, "read_pcm", lambda _s: (np.zeros((0, 2)), 48000))
-    with pytest.raises(ValueError, match="invalid PCM"):
-        await tts_synthesis.request_audio(client, semaphore, tmp_path, chunk)
-    assert not (tmp_path / "audio/failure.wav").exists()

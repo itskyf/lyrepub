@@ -97,8 +97,9 @@ Alignment title-attribute notes become linked footnotes with backlinks and their
 The reviewed back-cover transcription is ordinary visible text referenced by a short image alternative, rather than an oversized `alt` attribute.
 This transcription is absent from the audiobook, and no narration is added to the alignment pathway.
 Source-specific XHTML and stylesheet repairs are limited to their respective publications.
-Access modes follow actual image and audio resources, and synchronized-audio metadata requires Media Overlay references.
-Textual access is declared sufficient; auditory access is not declared sufficient for the alignment book's unmatched or unaudiobooked content.
+Discovery metadata reflects the known content: textual access for both books, visual access for the alignment book's informative images, and table-of-contents and synchronized-audio features for both.
+The alignment book also declares its image alternatives; static content excludes flashing and motion simulation, while the sound-hazard assessment remains unknown.
+Neither book declares `accessModeSufficient` while the human review needed to justify textual sufficiency remains incomplete.
 Automated results do not establish completed human accessibility review or accessibility conformance.
 
 ## Automated validation and package inspection
@@ -118,18 +119,20 @@ for book in thang-long-noi-gian dem-hoi-long-tri; do
 done
 ```
 
-Normal pytest checks reusable source mapping, coverage, approved punctuation joins, HTTP request/results, Opus packaging, manifest/SMIL references, and frozen alignment timings without importing standalone frontend packages.
-The focused suite passes 28 tests, the full suite passes 39 tests, and `hk check --pr` passes.
+Normal pytest checks reusable source mapping, coverage, all three approved punctuation joins, fail-closed source corrections, nested navigation, Opus packaging, manifest/SMIL references, and frozen alignment timings using only declared project and dev dependencies.
+The focused suite passes 32 tests and the full suite passes 43 tests.
+`hk check --pr` still fails Biome formatting on the unchanged mise-generated package files and `containers/audiocpp.json`; Python checks pass, and those out-of-scope files were not changed.
 All 280 files in the retained frozen-evidence checksum inventory remain unchanged.
 Actual frontend and inference integration runs through the inline-uv benchmark and publication commands.
-Both final EPUBs pass Compose EPUBCheck with zero errors and warnings and Ace with no automated findings.
+Both final EPUBs pass Compose EPUBCheck with zero errors and warnings.
+Ace flags the omitted `accessModeSufficient` property, a SHOULD discovery property whose textual claim awaits human review.
 Package inspection checks ZIP sizes and duplicate entries, manifest resources, local references, reachable assets, audio references, and overlay duration totals.
 Eight unused alignment source resources, including three byte-identical image variants, are removed from the final package while its referenced cover, portrait, transcription, and seven audio tracks remain available.
 The alignment package has 38 resources, 35 manifest entries, seven referenced Opus tracks, and 3,382 clips totaling 16,446.44 seconds of overlay intervals.
-It contains 167,904,216 file bytes, with 167,899,244 compressed and 170,887,627 uncompressed resource bytes.
+It contains 167,904,274 file bytes, with 167,899,302 compressed and 170,887,746 uncompressed resource bytes.
 Its encoded audio tracks total 16,446.603229 seconds, and package inspection finds no missing manifest resources, missing local references, duplicate entries, byte-identical resources, unreferenced audio, or unreachable manifest resources.
 The TTS package has 10,399 file resources, 10,396 manifest entries, 10,341 referenced Opus clips, and 26 SMIL documents.
-It contains 610,169,975 file bytes, with 608,510,335 compressed and 612,212,688 uncompressed resource bytes.
+It contains 610,169,986 file bytes, with 608,510,340 compressed and 612,212,676 uncompressed resource bytes.
 Its encoded audio resources total 43,891.6765 seconds; the rounded overlay intervals total 43,886.506 seconds.
 Its three original ZIP directory markers are listed separately from file resources.
 It has no missing references or manifest resources, unmanifested files, duplicate entries, byte-identical file resources, unreferenced audio, or unreachable manifest resources.
@@ -169,9 +172,9 @@ playwright-cli -s=readest requests
 
 Readest import and playback checks are focused validation evidence, not a new browser test suite.
 The original 168,645,341-byte alignment package remains at "Loading…" after successful file transfer; snapshots, console logs, and request inspection were retained before removing unused resources.
-The cleaned 167,904,216-byte alignment package also remains at "Loading…" after ten minutes, and a retry after reloading the page remains there for over an hour.
-The final 610,169,975-byte TTS EPUB transfers successfully through the same real import flow and remains at "Loading…" for over ten minutes.
-Neither final book completes import or becomes available to open, so final rendering, navigation, corrected-text presentation, synchronized playback, and highlighting cannot be checked in Readest.
+The previously reviewed 167,904,216-byte alignment package also remained at "Loading…" after ten minutes, and a retry after reloading the page remained there for over an hour.
+The previously reviewed 610,169,975-byte TTS EPUB transferred successfully through the same real import flow and remained at "Loading…" for over ten minutes.
+Neither previously reviewed package completed import or became available to open, so final rendering, navigation, corrected-text presentation, synchronized playback, and highlighting remain unverified in Readest for the rebuilt packages.
 The observed import consoles contain no EPUB parsing error; request inspection again records the blocked worker request without establishing its causal role.
 A separate bronze source control imports successfully; its first opening times out fetching Readest's reader-page JavaScript chunk, and reload recovers the reader.
 A blocked service-worker request and an unrelated analytics DNS failure are recorded but are not established as causes of the final-publication import hang.

@@ -22,19 +22,16 @@ from pathlib import Path
 from xml.etree.ElementTree import tostring
 from zipfile import ZipFile
 
-from defusedxml import ElementTree as ET
+from defusedxml import ElementTree
 
+from lyrepub.audio import ogg_duration
 from lyrepub.epub_text import extract_blocks, materialize_sentence_targets
 from lyrepub.media_overlays import Timing, publish_media_overlays
 from lyrepub.segmentation import segment_sentences
 from scripts.publication import correct_tts_source, publication_metadata, repair
-from scripts.tts_benchmark import (
-    MANUAL_NORMALIZATIONS,
-    key,
-    normalize_slash_enumeration,
-    ogg_duration,
-)
 from scripts.tts_synthesis import (
+    MANUAL_NORMALIZATIONS,
+    normalize_slash_enumeration,
     prepare_sentences,
     sha256,
     synthesize_records,
@@ -106,7 +103,7 @@ def prepare(source: Path, output: Path) -> None:
         except ValueError as exc:
             records.append(
                 {
-                    "key": key(block.spine_index, block.block_index),
+                    "key": f"s{block.spine_index}-b{block.block_index}",
                     "source": location,
                     "status": "preprocessing_failure",
                     "error": str(exc),
@@ -116,7 +113,7 @@ def prepare(source: Path, output: Path) -> None:
             LOGGER.error("%s: %s", records[-1]["key"], exc)
             continue
         record = {
-            "key": key(block.spine_index, block.block_index),
+            "key": f"s{block.spine_index}-b{block.block_index}",
             "source": location,
             "bronze_block_index": original.block_index,
             "seed": 14 + original.spine_index * 1000 + original.block_index,
@@ -137,10 +134,6 @@ def prepare(source: Path, output: Path) -> None:
             record["interventions"].append(
                 f"manual TTS normalization: {manual['source_span']} "
                 f"-> {manual['tts_text']}"
-            )
-        if treated != block.text or manual:
-            record["raw_frontend"] = prepare_sentences(
-                block.text, block.text, [s["source_text"] for s in sentences]
             )
         records.append(record)
     save_records(output, records)
@@ -223,7 +216,7 @@ def publish(source: Path, output: Path) -> None:
     work.mkdir(exist_ok=True)
     with ZipFile(source) as archive:
         opf = next(name for name in archive.namelist() if name.endswith(".opf"))
-        package = ET.fromstring(archive.read(opf))
+        package = ElementTree.fromstring(archive.read(opf))
         publication_metadata(package, "tts")
         edits[opf] = tostring(package, encoding="utf-8", xml_declaration=True)
         for href, rows in documents.items():

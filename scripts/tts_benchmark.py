@@ -18,11 +18,11 @@ import hashlib
 import importlib
 import json
 import logging
-import os
-import re
 import tempfile
-from decimal import Decimal
 from pathlib import Path
+
+from lyrepub.audio import run_tool
+from scripts.tts_synthesis import MANUAL_NORMALIZATIONS, normalize_slash_enumeration
 
 ISBN = "9786045633946"
 CASES = (
@@ -47,55 +47,7 @@ PREFIXES = {
     (5, 9): "Phủ Chiêu Quốc không phải là phủ lớn nhất",
     (17, 135): 'Tiếng "Sát Thát!',
 }
-MANUAL_NORMALIZATIONS = {
-    (17, 135): {"source_span": "S…át Th.. át!", "tts_text": "Sát Thát!"},
-}
 LOGGER = logging.getLogger(__name__)
-
-
-def normalize_slash_enumeration(text: str) -> str:
-    """Separate ordered slash-list markers; leave ambiguous slashes unchanged."""
-    markers = list(
-        re.finditer(r"(?:^|(?<=[(:;.\n]))[ \t]*(\d+)/[ \t]+(?=[^\W\d_])", text)
-    )
-    replacements = []
-    run = []
-    minimum_markers = 2
-    for marker in markers:
-        number = int(marker.group(1))
-        if run and number != int(run[-1].group(1)) + 1:
-            if len(run) >= minimum_markers:
-                replacements.extend(run)
-            run = []
-        if run or number == 1:
-            run.append(marker)
-    if len(run) >= minimum_markers:
-        replacements.extend(run)
-    for marker in reversed(replacements):
-        slash = marker.end(1)
-        text = text[:slash] + "," + text[slash + 1 :]
-    return text
-
-
-def run_tool(command: list[str]) -> tuple[str, str]:
-    """Run a local tool without a shell, capturing stdout and stderr."""
-    with (
-        tempfile.TemporaryFile() as stdout,
-        tempfile.TemporaryFile() as stderr,
-    ):
-        actions = [
-            (os.POSIX_SPAWN_DUP2, stdout.fileno(), 1),
-            (os.POSIX_SPAWN_DUP2, stderr.fileno(), 2),
-        ]
-        pid = os.posix_spawnp(command[0], command, os.environ, file_actions=actions)
-        _, status = os.waitpid(pid, 0)
-        stdout.seek(0)
-        stderr.seek(0)
-        out, err = stdout.read().decode(), stderr.read().decode()
-    if not os.WIFEXITED(status) or os.WEXITSTATUS(status) != 0:
-        message = f"{command[0]} failed: {err[-1000:]}"
-        raise RuntimeError(message)
-    return out, err
 
 
 def key(spine_index: int, block_index: int) -> str:
@@ -161,26 +113,6 @@ def prepare(output: Path, source: Path) -> None:
         + "\n",
         encoding="utf-8",
     )
-
-
-def ogg_duration(path: Path) -> Decimal:
-    stdout, _ = run_tool(
-        [
-            "ffprobe",
-            "-v",
-            "error",
-            "-show_entries",
-            "format=duration",
-            "-of",
-            "default=noprint_wrappers=1:nokey=1",
-            str(path),
-        ]
-    )
-    duration = Decimal(stdout.strip()).quantize(Decimal("0.001"))
-    if duration <= 0:
-        message = f"invalid packaged audio duration: {path}"
-        raise ValueError(message)
-    return duration
 
 
 def compare(output: Path, frozen: Path) -> None:

@@ -1,6 +1,7 @@
 """Repair the two source-specific publications without modifying evidence."""
 
 import argparse
+import hashlib
 import json
 import posixpath
 from datetime import UTC, datetime
@@ -10,9 +11,9 @@ from urllib.parse import unquote
 from xml.etree.ElementTree import Element, SubElement, register_namespace, tostring
 from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
-from defusedxml import ElementTree as ET
+from defusedxml import ElementTree
 
-from scripts.tts_benchmark import ogg_duration, run_tool
+from lyrepub.audio import encode_opus
 
 OPF = "http://www.idpf.org/2007/opf"
 XHTML = "http://www.w3.org/1999/xhtml"
@@ -25,6 +26,26 @@ NS = {"p": OPF, "x": XHTML, "s": SMIL, "d": DC}
 register_namespace("", XHTML)
 register_namespace("epub", EPUB)
 register_namespace("dc", DC)
+
+# Pin complete reviewed paragraphs without duplicating the book's text in code.
+REVIEWED_CONTEXT = {
+    "OEBPS/Text/1.html": (
+        "V",
+        (
+            "4e01f496d6bf1484f2f58d43d600add715d158de645c515624a451f49be84623",
+            "de5a6f78116eca62d7fc5ce159d23ae6b889b365a1739ad2cf36f925a140d0cc",
+            "9c4fe286bb8e87f0ab098f835b79e0c2171878172683593763f21cae4ed3f82e",
+        ),
+    ),
+    "OEBPS/Text/12.html": (
+        '"P',
+        (
+            "791a2332317bd031091fc2ae03fc7d743975bbff2b76141c60f19100007579fb",
+            "d64c584c2c97924407a327cfb5e2dfe5e27e8fc901686e0c32bc7017d21d6f63",
+            "8f64ce92cbd2b514406ca9fcc9e29983e24d58c968312e5c64e7504a6e7abb21",
+        ),
+    ),
+}
 
 
 def write_epub(
@@ -47,7 +68,7 @@ def write_epub(
 
 
 def publication_metadata(package: Element, pathway: str) -> None:
-    """Set metadata from declared resources and the publication's coverage."""
+    """Set reviewed discovery metadata for each known publication."""
     metadata = package.find("p:metadata", NS)
     identifier = metadata.find("d:identifier", NS)
     identifier.set("id", package.get("unique-identifier"))
@@ -77,14 +98,13 @@ def publication_metadata(package: Element, pathway: str) -> None:
     for element in list(metadata):
         if element.get("property", "").startswith("schema:access"):
             metadata.remove(element)
-    for prop, value in (
+    properties = [
         ("schema:accessMode", "textual"),
-        (
-            "schema:accessModeSufficient",
-            "textual",
-        ),
         ("schema:accessibilityFeature", "tableOfContents"),
-        ("schema:accessibilityHazard", "unknown"),
+        ("schema:accessibilityFeature", "synchronizedAudioText"),
+        ("schema:accessibilityHazard", "noFlashingHazard"),
+        ("schema:accessibilityHazard", "noMotionSimulationHazard"),
+        ("schema:accessibilityHazard", "unknownSoundHazard"),
         (
             "schema:accessibilitySummary",
             (
@@ -98,22 +118,16 @@ def publication_metadata(package: Element, pathway: str) -> None:
                 "is pending."
             ),
         ),
-    ):
+    ]
+    if pathway == "alignment":
+        properties.extend(
+            (
+                ("schema:accessMode", "visual"),
+                ("schema:accessibilityFeature", "alternativeText"),
+            )
+        )
+    for prop, value in properties:
         SubElement(metadata, f"{{{OPF}}}meta", {"property": prop}).text = value
-    manifest = package.find("p:manifest", NS)
-    media_types = {item.get("media-type", "") for item in manifest}
-    if any(media.startswith("audio/") for media in media_types):
-        SubElement(
-            metadata, f"{{{OPF}}}meta", {"property": "schema:accessMode"}
-        ).text = "auditory"
-    if any(media.startswith("image/") for media in media_types):
-        SubElement(
-            metadata, f"{{{OPF}}}meta", {"property": "schema:accessMode"}
-        ).text = "visual"
-    if any(item.get("media-overlay") for item in manifest):
-        SubElement(
-            metadata, f"{{{OPF}}}meta", {"property": "schema:accessibilityFeature"}
-        ).text = "synchronizedAudioText"
 
 
 def _tts_navigation(
@@ -129,21 +143,30 @@ def _tts_navigation(
     if any("nav" in item.get("properties", "").split() for item in manifest):
         return
     ncx_item = manifest.find("p:item[@media-type='application/x-dtbncx+xml']", NS)
-    ncx = ET.fromstring(archive.read(posixpath.join(directory, ncx_item.get("href"))))
+    ncx = ElementTree.fromstring(
+        archive.read(posixpath.join(directory, ncx_item.get("href")))
+    )
     ncx_ns = {"n": "http://www.daisy.org/z3986/2005/ncx/"}
-    nav = ET.fromstring(
+    nav = ElementTree.fromstring(
         f'<html xmlns="{XHTML}" xmlns:epub="{EPUB}" lang="vi" xml:lang="vi">'
         '<head><title>Mục lục</title></head><body><nav epub:type="toc" '
         'id="toc" role="doc-toc"><h1>Mục lục</h1><ol/></nav></body></html>'
     )
     listing = nav.find("x:body/x:nav/x:ol", NS)
-    for point in ncx.findall(".//n:navPoint", ncx_ns):
-        item = SubElement(listing, f"{{{XHTML}}}li")
-        SubElement(
-            item,
-            f"{{{XHTML}}}a",
-            {"href": point.find("n:content", ncx_ns).get("src")},
-        ).text = point.findtext("n:navLabel/n:text", namespaces=ncx_ns)
+
+    def add_points(points: list[Element], parent: Element) -> None:
+        for point in points:
+            item = SubElement(parent, f"{{{XHTML}}}li")
+            SubElement(
+                item,
+                f"{{{XHTML}}}a",
+                {"href": point.find("n:content", ncx_ns).get("src")},
+            ).text = point.findtext("n:navLabel/n:text", namespaces=ncx_ns)
+            children = point.findall("n:navPoint", ncx_ns)
+            if children:
+                add_points(children, SubElement(item, f"{{{XHTML}}}ol"))
+
+    add_points(ncx.findall("n:navMap/n:navPoint", ncx_ns), listing)
     edits[posixpath.join(directory, "nav.xhtml")] = tostring(
         nav, encoding="utf-8", xml_declaration=True
     )
@@ -293,7 +316,7 @@ def repair(source: Path, output: Path, pathway: str) -> None:
     )
     with ZipFile(source) as archive:
         package_path = next(n for n in archive.namelist() if n.endswith(".opf"))
-        package = ET.fromstring(archive.read(package_path))
+        package = ElementTree.fromstring(archive.read(package_path))
         directory = posixpath.dirname(package_path)
         metadata, _manifest = (
             package.find("p:metadata", NS),
@@ -314,13 +337,13 @@ def repair(source: Path, output: Path, pathway: str) -> None:
             if name in removed:
                 continue
             if name.endswith((".html", ".xhtml")):
-                root = ET.fromstring(archive.read(name))
+                root = ElementTree.fromstring(archive.read(name))
                 _xhtml(root, name, title, pathway)
                 if pathway == "alignment":
                     _alignment_images(root, title, author)
                 edits[name] = tostring(root, encoding="utf-8", xml_declaration=True)
             elif name.endswith(".ncx") and pathway == "alignment":
-                ncx = ET.fromstring(archive.read(name))
+                ncx = ElementTree.fromstring(archive.read(name))
                 uid = ncx.find(
                     "{http://www.daisy.org/z3986/2005/ncx/}head/{http://www.daisy.org/z3986/2005/ncx/}meta[@name='dtb:uid']"
                 )
@@ -349,20 +372,25 @@ def correct_tts_source(source: Path, output: Path) -> None:
     """Correct reviewed duplicate initials in the final TTS source copy."""
     edits = {}
     with ZipFile(source) as archive:
-        for name, duplicate, prefix in (
-            ("OEBPS/Text/1.html", "V", "Vừa bước vào tới cửa cung Thánh từ"),
-            ("OEBPS/Text/12.html", '"P', '"P hú quốc Cường binh sách"'),
-        ):
+        for name, (duplicate, context) in REVIEWED_CONTEXT.items():
             if name not in archive.namelist():
-                continue
-            root = ET.fromstring(archive.read(name))
+                message = f"reviewed duplicate-initial resource missing: {name}"
+                raise ValueError(message)
+            root = ElementTree.fromstring(archive.read(name))
             body = root.find("x:body", NS)
-            paragraphs = body.findall("x:p", NS)
+            paragraphs = body.findall("x:p", NS) if body is not None else []
             if (
-                not paragraphs[0].text.startswith(prefix)
-                or paragraphs[1].text != duplicate
+                len(paragraphs) < len(context)
+                or any(p.attrib or len(p) for p in paragraphs[: len(context)])
+                or tuple(
+                    hashlib.sha256((p.text or "").encode()).hexdigest()
+                    for p in paragraphs[: len(context)]
+                )
+                != context
             ):
-                message = "reviewed duplicate-initial context differs from source"
+                message = (
+                    f"reviewed duplicate-initial context differs from source: {name}"
+                )
                 raise ValueError(message)
             if duplicate == '"P':
                 paragraphs[0].text = paragraphs[0].text.replace('"P hú', '"Phú', 1)
@@ -381,7 +409,9 @@ def verify_alignment(frozen: Path, regenerated: Path, epub: Path) -> None:
         clips = {}
         for name in archive.namelist():
             if name.endswith(".smil"):
-                for par in ET.fromstring(archive.read(name)).findall(".//s:par", NS):
+                for par in ElementTree.fromstring(archive.read(name)).findall(
+                    ".//s:par", NS
+                ):
                     audio = par.find("s:audio", NS)
                     if audio is not None:
                         clips[par.get("id")] = audio.attrib
@@ -423,7 +453,7 @@ def package_alignment(source: Path, output: Path) -> None:
     edits, removed, durations = {}, set(), {}
     with ZipFile(source) as archive:
         package_path = next(n for n in archive.namelist() if n.endswith(".opf"))
-        package = ET.fromstring(archive.read(package_path))
+        package = ElementTree.fromstring(archive.read(package_path))
         directory = posixpath.dirname(package_path)
         for item in package.findall("p:manifest/p:item[@media-type='audio/mpeg']", NS):
             path = posixpath.normpath(
@@ -434,30 +464,16 @@ def package_alignment(source: Path, output: Path) -> None:
                 work / Path(path).with_suffix(".opus").name,
             )
             mp3.write_bytes(archive.read(path))
-            run_tool(
-                [
-                    "ffmpeg",
-                    "-v",
-                    "error",
-                    "-y",
-                    "-i",
-                    str(mp3),
-                    "-c:a",
-                    "libopus",
-                    "-b:a",
-                    "96k",
-                    str(opus),
-                ]
-            )
+            duration = encode_opus(mp3, opus)
             packaged = posixpath.splitext(path)[0] + ".opus"
-            edits[packaged], durations[packaged] = opus.read_bytes(), ogg_duration(opus)
+            edits[packaged], durations[packaged] = opus.read_bytes(), duration
             item.set("href", posixpath.splitext(item.get("href"))[0] + ".opus")
             item.set("media-type", "audio/ogg; codecs=opus")
             removed.add(path)
         for name in archive.namelist():
             if not name.endswith(".smil"):
                 continue
-            root = ET.fromstring(archive.read(name))
+            root = ElementTree.fromstring(archive.read(name))
             for audio in root.findall(".//s:audio", NS):
                 reference = posixpath.splitext(audio.get("src"))[0] + ".opus"
                 path = posixpath.normpath(

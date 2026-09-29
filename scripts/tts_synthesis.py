@@ -1,7 +1,5 @@
 """Frozen TTS frontend, audio packaging, and Compose inference."""
 
-from __future__ import annotations
-
 import asyncio
 import hashlib
 import importlib
@@ -9,26 +7,26 @@ import importlib.metadata
 import io
 import json
 import logging
+import re
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-import numpy as np
+if TYPE_CHECKING:
+    from numpy import ndarray
+    from zapros import AsyncClient
 
+from lyrepub.audio import encode_opus, run_tool
 from lyrepub.segmentation import (
     SAT_NAME,
     SAT_REVISION,
     TOKENIZER_NAME,
     TOKENIZER_REVISION,
 )
-from scripts.tts_benchmark import (
-    ogg_duration,
-    run_tool,
-)
-
-if TYPE_CHECKING:
-    from zapros import AsyncClient
 
 SAMPLE_RATE = 48000
+MANUAL_NORMALIZATIONS = {
+    (17, 135): {"source_span": "S…át Th.. át!", "tts_text": "Sát Thát!"},
+}
 
 LOGGER = logging.getLogger(__name__)
 VIENEU_REVISION = "c1390abbdb2eedcdf58eafb546966c06ce27af71"
@@ -44,6 +42,30 @@ VOICE_SHA256 = {
         "ab66bc624b0ffaa735c8ece1aa71b12f18b48bddc2e7cd27ba9eec3d85c2bce9"
     ),
 }
+
+
+def normalize_slash_enumeration(text: str) -> str:
+    """Separate ordered slash-list markers; leave ambiguous slashes unchanged."""
+    markers = list(
+        re.finditer(r"(?:^|(?<=[(:;.\n]))[ \t]*(\d+)/[ \t]+(?=[^\W\d_])", text)
+    )
+    replacements = []
+    run = []
+    minimum_markers = 2
+    for marker in markers:
+        number = int(marker.group(1))
+        if run and number != int(run[-1].group(1)) + 1:
+            if len(run) >= minimum_markers:
+                replacements.extend(run)
+            run = []
+        if run or number == 1:
+            run.append(marker)
+    if len(run) >= minimum_markers:
+        replacements.extend(run)
+    for marker in reversed(replacements):
+        slash = marker.end(1)
+        text = text[:slash] + "," + text[slash + 1 :]
+    return text
 
 
 def sha256(path: Path) -> str:
@@ -200,29 +222,14 @@ def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
     }
 
 
-def package_audio(output: Path, name: str, pcm: np.ndarray, rate: int) -> dict:
+def package_audio(output: Path, name: str, pcm: "ndarray", rate: int) -> dict:
     """Encode joined narration as Opus and record measured clip duration."""
     wav = output / "audio" / f"{name}.wav"
     opus = output / "audio" / f"{name}.opus"
     sf = importlib.import_module("soundfile")
 
     sf.write(wav, pcm, rate, subtype="PCM_16")
-    run_tool(
-        [
-            "ffmpeg",
-            "-v",
-            "error",
-            "-y",
-            "-i",
-            str(wav),
-            "-c:a",
-            "libopus",
-            "-b:a",
-            "96k",
-            str(opus),
-        ]
-    )
-    duration = str(ogg_duration(opus))
+    duration = str(encode_opus(wav, opus))
     return {
         "audio": f"audio/{name}.wav",
         "packaged_audio": f"audio/{name}.opus",
@@ -230,7 +237,6 @@ def package_audio(output: Path, name: str, pcm: np.ndarray, rate: int) -> dict:
         "sample_rate": rate,
         "clip_begin": "0.000",
         "clip_end": duration,
-        "duration_seconds": duration,
     }
 
 
@@ -244,13 +250,13 @@ def frontend_phonemes(text: str) -> str:
     return frontend.phonemize_text_with_emotions(text)
 
 
-def read_pcm(source: Path | io.BytesIO) -> tuple[np.ndarray, int]:
+def read_pcm(source: Path | io.BytesIO) -> tuple["ndarray", int]:
     sf = importlib.import_module("soundfile")
     return sf.read(source, dtype="float32", always_2d=True)
 
 
 async def request_audio(
-    client: AsyncClient, semaphore: asyncio.Semaphore, output: Path, chunk: dict
+    client: "AsyncClient", semaphore: asyncio.Semaphore, output: Path, chunk: dict
 ) -> None:
     """Send one frozen phoneme chunk and reject HTTP or invalid WAV results."""
     phonemes = chunk["phonemes"]
@@ -284,7 +290,11 @@ async def request_audio(
             message = "audio.cpp returned a non-WAV response"
             raise ValueError(message)
         pcm, rate = await asyncio.to_thread(read_pcm, io.BytesIO(content))
-        if rate != SAMPLE_RATE or not len(pcm) or not np.isfinite(pcm).all():
+        if (
+            rate != SAMPLE_RATE
+            or not len(pcm)
+            or not importlib.import_module("numpy").isfinite(pcm).all()
+        ):
             message = "audio.cpp returned invalid PCM"
             raise ValueError(message)
         chunk["audio"] = f"audio/{chunk['key']}.wav"
@@ -293,7 +303,7 @@ async def request_audio(
 
 async def synthesize_sentences(
     output: Path,
-    client: AsyncClient,
+    client: "AsyncClient",
     semaphore: asyncio.Semaphore,
     record: dict,
     *,
