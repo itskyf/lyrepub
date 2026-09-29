@@ -457,6 +457,7 @@ environments:
       - conda: https://conda.anaconda.org/conda-forge/noarch/tzdata-2026c-h151e31d_0.conda
       - conda: https://conda.anaconda.org/conda-forge/noarch/wayland-protocols-1.49-hd8ed1ab_0.conda
       - pypi: ./
+      - pypi: git+https://github.com/googlecolab/jupyter-kernel-client.git?rev=f18e982c3265df5e923aa9def101ab3fd737e139#f18e982c3265df5e923aa9def101ab3fd737e139
       - pypi: https://files.pythonhosted.org/packages/03/8a/dea48fd8863da2a920e6f83c3ce9b0a00dbb5517cd77b834746812d4687e/gradio_client-2.7.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/03/e2/08a497ef684b88559c9cc5f4ad53a37e7b99e727094a86d6ea32536d5d3c/pytest_asyncio-1.4.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/04/4b/29cac41a4d98d144bf5f6d33995617b185d14b22401f75ca86f384e87ff1/h11-0.16.0-py3-none-any.whl
@@ -576,7 +577,6 @@ environments:
       - pypi: https://files.pythonhosted.org/packages/a7/03/921a3d3c75785aca9ebfbfcabfbc3a1be12e2ab5265deb026d55a5a3f83e/tqdm-4.70.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a8/2f/7b57e29836ea8714f81e9898409196f47d772d5ddedddf1592eadb8ab743/nvidia_cufft-12.0.0.61-py3-none-manylinux2014_x86_64.manylinux_2_17_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/a8/a6/e22c83c03a769f79c21b33200f9db2ff9a8583610c60b5f1cc323dabb87e/gradio-6.28.0-py3-none-any.whl
-      - pypi: https://files.pythonhosted.org/packages/a8/d6/7b084e598cc2ea7300d47f911b66d32264f25115af333383e5ecc05b3b81/jupyter_kernel_client-0.8.0-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/a9/21/9b05698b46f218fc0e118e1f8168395c65c8a2c750ae2bab54fc4bd4e0e8/markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
       - pypi: https://files.pythonhosted.org/packages/ad/66/0d785f0bc5e4315a96c989bb476d0fc07ea4f85132550c7b156ca2035d52/traitlets-5.16.1-py3-none-any.whl
       - pypi: https://files.pythonhosted.org/packages/b0/b6/3394d5548404c1cabd1dadadd28d0b3f9478db1dff8180da53bb3f0a1e19/triton-3.8.0-cp313-cp313-manylinux_2_27_x86_64.manylinux_2_28_x86_64.whl
@@ -3137,11 +3137,37 @@ packages:
   requires_dist:
   - defusedxml>=0.7.1,<0.8
   - fast-ebook>=0.2.0,<0.3
+  - sea-g2p>=0.10.0,<0.11
   - transformers[torch]>=5.17.0,<6
+  - vieneu>=3.8.3,<4
   - wtpsplit>=2.2.2,<3
-  - sea-g2p
-  - vieneu
   requires_python: '>=3.13'
+- pypi: git+https://github.com/googlecolab/jupyter-kernel-client.git?rev=f18e982c3265df5e923aa9def101ab3fd737e139#f18e982c3265df5e923aa9def101ab3fd737e139
+  name: jupyter-kernel-client
+  version: 0.8.0
+  requires_dist:
+  - jupyter-client>=8.6.3
+  - jupyter-core
+  - jupyter-mimetypes
+  - requests
+  - traitlets>=5.3
+  - typing-extensions
+  - websocket-client
+  - jupyter-console ; extra == 'konsole'
+  - mdformat-gfm>=0.3.5 ; extra == 'lint'
+  - mdformat>0.7 ; extra == 'lint'
+  - pre-commit ; extra == 'lint'
+  - ruff ; extra == 'lint'
+  - ipykernel ; extra == 'test'
+  - jupyter-server>=2.10,<3 ; extra == 'test'
+  - numpy ; extra == 'test'
+  - pandas ; extra == 'test'
+  - pytest-asyncio ; extra == 'test'
+  - pytest-cov ; extra == 'test'
+  - pytest-timeout ; extra == 'test'
+  - pytest>=7.0 ; extra == 'test'
+  - mypy>=0.990 ; extra == 'typing'
+  requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/03/8a/dea48fd8863da2a920e6f83c3ce9b0a00dbb5517cd77b834746812d4687e/gradio_client-2.7.1-py3-none-any.whl
   name: gradio-client
   version: 2.7.1
@@ -4953,33 +4979,6 @@ packages:
   - authlib ; extra == 'oauth'
   - itsdangerous ; extra == 'oauth'
   requires_python: '>=3.10'
-- pypi: https://files.pythonhosted.org/packages/a8/d6/7b084e598cc2ea7300d47f911b66d32264f25115af333383e5ecc05b3b81/jupyter_kernel_client-0.8.0-py3-none-any.whl
-  name: jupyter-kernel-client
-  version: 0.8.0
-  sha256: 1cae48cc51056ccd464d97e312bdefaaf470e8bb6bf1ccb81d8482942383f625
-  requires_dist:
-  - jupyter-client>=8.6.3
-  - jupyter-core
-  - jupyter-mimetypes
-  - requests
-  - traitlets>=5.3
-  - typing-extensions
-  - websocket-client
-  - jupyter-console ; extra == 'konsole'
-  - mdformat-gfm>=0.3.5 ; extra == 'lint'
-  - mdformat>0.7 ; extra == 'lint'
-  - pre-commit ; extra == 'lint'
-  - ruff ; extra == 'lint'
-  - ipykernel ; extra == 'test'
-  - jupyter-server>=2.10,<3 ; extra == 'test'
-  - numpy ; extra == 'test'
-  - pandas ; extra == 'test'
-  - pytest-asyncio ; extra == 'test'
-  - pytest-cov ; extra == 'test'
-  - pytest-timeout ; extra == 'test'
-  - pytest>=7.0 ; extra == 'test'
-  - mypy>=0.990 ; extra == 'typing'
-  requires_python: '>=3.9'
 - pypi: https://files.pythonhosted.org/packages/a9/21/9b05698b46f218fc0e118e1f8168395c65c8a2c750ae2bab54fc4bd4e0e8/markupsafe-3.0.3-cp313-cp313-manylinux2014_x86_64.manylinux_2_17_x86_64.manylinux_2_28_x86_64.whl
   name: markupsafe
   version: 3.0.3

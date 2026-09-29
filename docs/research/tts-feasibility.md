@@ -1,7 +1,7 @@
 # VieNeu-TTS feasibility review and frozen configuration
 
 Human feasibility review is complete, and the configuration below is frozen for the reported Issue #14 evaluation.
-No reported evaluation has run yet.
+The reported evaluation has run under this freeze; see [Reported evaluation](#reported-evaluation).
 The nine benchmark cases come from [source characterization](source-characterization.md), and the methodological freeze is recorded in the [protocol](protocol.md).
 
 ## Selected configuration
@@ -79,7 +79,18 @@ These are qualitative listening observations, not scores.
 | `s17-b135` | The corrected lexical pronunciation was accepted; the raw frontend failure and expressive-shout limitation remain recorded. |
 | `s18-b35` | Reviewed transliteration plus original-name material was acceptable; both forms are authored source content. |
 
-All nine cases completed preprocessing, synthesis, and Opus packaging without runtime exceptions.
+## Reported evaluation
+
+The frozen configuration was run unchanged on the nine benchmark cases into `data/silver/issue-14-reported/`.
+
+Machine-recorded results:
+
+- 9/9 cases completed preprocessing, synthesis, and Opus packaging with no runtime or preprocessing failure.
+- All 118 sentence text/start/end triples were identical to the frozen feasibility segmentation.
+- Exactly the two frozen interventions occurred: the `s2-b70` slash-list treatment and the `s17-b135` manual TTS-input correction; authored text and sentence offsets remained unchanged.
+
+The repository owner listened to all nine fresh full-case Opus outputs and found all nine acceptable.
+The existing `s17-b135` raw frontend failure and stronger/extended-shout limitation remain documented limitations of the selected pathway.
 
 ## Synchronization handoff
 
@@ -89,16 +100,18 @@ Source blocks, internal TTS chunks, and publication synchronization targets rema
 Each sentence owns one final Opus file with a local timing interval from zero to its measured duration.
 Internal TTS chunk boundaries do not become Media Overlay targets.
 Issue #16 owns sentence-addressable XHTML targeting and consumes the frozen sentence identities, offsets, and Opus timings produced by Issue #14.
+The reported `data/silver/issue-14-reported/cases.json` provides the sentence timing records for Issue #16.
 
 ## Reproduction and retained evidence
 
 Set `SOURCE_EPUB`, `MODEL_GGUF`, `VOICE_DIR`, and `AUDIOCPP_IMAGE` to the reviewed inputs and reproduce into a fresh output directory:
 
 ```sh
-OUT=data/issue-14-final-frontend-reproduction
+OUT=data/issue-14-reported-reproduction
 pixi run -e dev python -m scripts.issue14_feasibility prepare --output "$OUT" --source-epub "$SOURCE_EPUB"
 pixi run -e dev python -m scripts.issue14_feasibility synthesize --output "$OUT" --model "$MODEL_GGUF" --voice-dir "$VOICE_DIR" --image "$AUDIOCPP_IMAGE"
 ```
 
-The retained `data/silver/issue-14/` handoff contains the JSON records needed to reproduce and inspect the frozen run, the selected Opus outputs, the raw s17 failure, `number-boundary-diagnostic.json`, and the paragraph diagnostic EPUB used for the granularity decision.
+The retained `data/silver/issue-14/` feasibility handoff contains the JSON records needed to reproduce and inspect the frozen run, the selected Opus outputs, the raw s17 failure, `number-boundary-diagnostic.json`, and the paragraph diagnostic EPUB used for the granularity decision.
+The reported evaluation is retained in `data/silver/issue-14-reported/` as machine-readable records plus the sentence and full-case Opus outputs.
 Intermediate audio, models, voice assets, logs, and validator images are not duplicated into the silver handoff.

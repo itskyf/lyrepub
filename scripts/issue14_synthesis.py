@@ -244,7 +244,7 @@ def validate_inputs(model: Path, voice_dir: Path) -> list[Path]:
 
 def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
     return {
-        "purpose": "frontend and synthesis-unit feasibility; not reported evaluation",
+        "purpose": "frozen Issue #14 TTS configuration",
         "runtime": "audio.cpp",
         "image": image,
         "checkpoint": f"pnnbao-ump/VieNeu-TTS-v3-Turbo@{CHECKPOINT_REVISION}",
