@@ -4,7 +4,9 @@ x-audiocpp-build: &audiocpp-build
 
 services:
   playwright:
-    image: mcr.microsoft.com/playwright:v1.63.0
+    build:
+      context: .
+      dockerfile: containers/Containerfile.playwright
     init: true
     ipc: host
     ports:
@@ -12,7 +14,6 @@ services:
         published: "3000"
         host_ip: 127.0.0.1
         protocol: tcp
-    command: [npx, --yes, playwright@1.63.0, run-server, --port, "3000", --host, 0.0.0.0]
     healthcheck:
       test: [CMD, node, --eval, "const s = require('net').connect(3000, '127.0.0.1'); s.on('connect', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1)); s.setTimeout(1000, () => process.exit(1));"]
       start_period: 60s # Playwright's webServer startup allowance is 60 seconds.

@@ -1,0 +1,38 @@
+FROM mcr.microsoft.com/playwright:v1.63.0 AS playwright-tool
+
+COPY --from=ghcr.io/jdx/mise:2026.9.16 \
+    /usr/local/bin/mise \
+    /usr/local/bin/mise
+
+ENV MISE_DATA_DIR=/opt/mise-playwright
+ENV MISE_TRUSTED_CONFIG_PATHS=/opt/project
+# The npm backend needs Node; use the base image's instead of installing another.
+ENV MISE_NODE_VERSION=system
+
+WORKDIR /opt/project
+
+COPY mise.toml mise.lock ./
+COPY .mise/locks/npm-playwright/ .mise/locks/npm-playwright/
+
+RUN mise install --locked npm:playwright \
+    && mkdir /opt/mise-playwright/bin \
+    && ln --symbolic "$(mise which playwright)" /opt/mise-playwright/bin/playwright
+
+
+FROM mcr.microsoft.com/playwright:v1.63.0
+
+COPY --from=playwright-tool \
+    /opt/mise-playwright \
+    /opt/mise-playwright
+
+# The aube shim resolves paths from $0, and COPY --from would flatten a
+# symlink into a broken plain file, so link it in the final stage.
+RUN ln --symbolic /opt/mise-playwright/bin/playwright /usr/local/bin/playwright
+
+USER pwuser
+WORKDIR /home/pwuser
+
+CMD ["playwright", \
+     "run-server", \
+     "--host", "0.0.0.0", \
+     "--port", "3000"]

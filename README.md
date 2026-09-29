@@ -103,14 +103,15 @@ podman compose build epubcheck ace
 
 ### Browser validation
 
-The Compose Playwright service provides Chromium for the mise-managed `playwright-cli` without installing a browser on the host:
+The Compose Playwright service provides Chromium for the mise-managed `playwright cli` without installing a browser on the host:
 
 ```shell
+podman compose build playwright
 podman compose up --detach playwright
 ```
 
 Use the CLI's remote configuration with `browser.isolated` set to `true` and `browser.remoteEndpoint` set to `ws://127.0.0.1:3000/?browser=chromium`.
-The pinned CLI uses the compatible Playwright 1.63 client; the service runs Playwright 1.63.0.
+Playwright is declared in `mise.toml` and pinned in `mise.lock`; the image installs the same locked version as the host.
 See [publication validation](docs/research/publication-validation.md) for the import and playback workflow.
 
 ## Repository Map

@@ -196,20 +196,17 @@ url = "https://nodejs.org/dist/v26.10.0/node-v26.10.0-darwin-x64.tar.gz"
 checksum = "sha256:9fef7eca6743a6b910989cd8e78712376b394fcb9b6e1e9c44a0799a287f90c5"
 url = "https://nodejs.org/dist/v26.10.0/node-v26.10.0-win-x64.zip"
 
-[[tools."npm:@playwright/cli"]]
-version = "0.1.19"
-aube = { path = ".mise/locks/npm-playwright-cli/0.1.19~b421a047", digest = "sha256:abe46ea56d622fbc7744b98c326ce256b17d35f3751567626f65bd163cb83922" }
-backend = "npm:@playwright/cli"
-specifiers = ["0.1.19"]
-
-[tools."npm:@playwright/cli".options]
-trust_policy_excludes = '["@playwright/cli@0.1.19", "playwright-core@1.63.0-alpha-2026-08-31", "playwright@1.63.0-alpha-2026-08-31"]'
-
 [[tools."npm:@storyteller-platform/align"]]
 version = "0.2.4"
 aube = { path = ".mise/locks/npm-storyteller-platform-align/0.2.4", digest = "sha256:50d975f7ce47eeee002b63abc5b9b71677ddd6b8d81006946e1495010678a6f0" }
 backend = "npm:@storyteller-platform/align"
 specifiers = ["0.2.4"]
+
+[[tools."npm:playwright"]]
+version = "1.63.0"
+aube = { path = ".mise/locks/npm-playwright/1.63.0", digest = "sha256:923502d4bfc680e227e6fcd3869f0c080d099393de9bd820854e11e964c4fe1e" }
+backend = "npm:playwright"
+specifiers = ["latest"]
 
 [[tools.pixi]]
 version = "0.81.0"

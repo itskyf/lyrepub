@@ -137,10 +137,10 @@ Final package inventories are retained as `package-inspection.json` beside each 
 
 ## Readest validation
 
-The repository Playwright service uses `mcr.microsoft.com/playwright:v1.63.0` and Playwright 1.63.0 `run-server`, with `init`, Chromium host IPC, and a loopback-published port 3000.
+The repository Playwright service is built from `containers/Containerfile.playwright` on `mcr.microsoft.com/playwright:v1.63.0` and runs `run-server`, with `init`, Chromium host IPC, and a loopback-published port 3000.
 Its healthcheck probes that local server port without launching a browser; the 60-second startup allowance follows [Playwright's web-server default](https://playwright.dev/docs/test-webserver).
-The mise-managed CLI 0.1.19 supplies a compatible Playwright 1.63 client.
-Its npm release and integrity were checked against the upstream tag and npm registry before adding narrowly versioned provenance exceptions for that release and its two published alpha dependencies.
+Playwright is declared in `mise.toml`, pinned to 1.63.0 in `mise.lock`, and installed from that lock by both the host CLI and the service image.
+The stable `playwright` release replaces the former `@playwright/cli` and its alpha dependencies, so no provenance exceptions remain.
 The remote configuration explicitly selects Chromium through the server's supported endpoint query and creates an isolated context.
 No browser is installed on the host, and EPUBs transfer through the CLI upload operation without an EPUB volume mount.
 
@@ -157,14 +157,14 @@ Create `data/publications/browser-review/` and save the following JSON as `cli.c
 ```
 
 ```sh
-playwright-cli -s=readest open https://web.readest.com/ \
+playwright cli --session=readest open https://web.readest.com/ \
   --config=data/publications/browser-review/cli.config.json
-playwright-cli -s=readest snapshot
+playwright cli --session=readest snapshot
 # Select Import Books, then From Local File using the snapshot refs.
-playwright-cli -s=readest upload data/publications/dem-hoi-long-tri/final.epub
-playwright-cli -s=readest snapshot
-playwright-cli -s=readest console
-playwright-cli -s=readest requests
+playwright cli --session=readest upload data/publications/dem-hoi-long-tri/final.epub
+playwright cli --session=readest snapshot
+playwright cli --session=readest console
+playwright cli --session=readest requests
 ```
 
 Readest import and playback checks are focused validation evidence, not a new browser test suite.
