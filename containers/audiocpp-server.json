@@ -1,0 +1,13 @@
+{
+  "models": [
+    {
+      "id": "vieneu",
+      "family": "vieneu_v3_turbo",
+      "path": "/app/models/VieNeu-TTS-v3-Turbo-GGUF/vieneu-v3-turbo-bf16.gguf",
+      "default_request_options": {
+        "reference_codes_file": "/app/models/VieNeu-TTS-v3-Turbo-GGUF/gguf/voices/quynh_anh/ref_codes.txt",
+        "speaker_embedding_file": "/app/models/VieNeu-TTS-v3-Turbo-GGUF/gguf/voices/quynh_anh/speaker.emb.txt"
+      }
+    }
+  ]
+}
