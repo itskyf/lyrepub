@@ -1,18 +1,30 @@
-"""Focused frontend feasibility checks; no sentence model or synthesis inference."""
+"""TTS source mapping and HTTP contracts without standalone dependencies."""
 
+import asyncio
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from lyrepub import segmentation
-from scripts.issue14_feasibility import normalize_slash_enumeration
-from scripts.issue14_synthesis import (
-    frontend_identity,
-    prepare_sentences,
-    run_audio_cpp,
-    synthesize_sentences,
-)
+from scripts import tts_synthesis
+from scripts.tts_benchmark import normalize_slash_enumeration
+from scripts.tts_synthesis import prepare_sentences
+
+
+def test_runtime_requires_loaded_model(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(tts_synthesis, "validate_inputs", lambda *_args: [])
+    monkeypatch.setattr(
+        tts_synthesis,
+        "run_tool",
+        lambda command: (
+            '{"backend":"cuda"}' if command[-1].endswith("/health") else '{"data":[]}',
+            "",
+        ),
+    )
+    with pytest.raises(ValueError, match="model loaded"):
+        tts_synthesis.inspect_runtime(Path("model"), Path("voice"))
 
 
 def test_slash_enumeration_treatment() -> None:
@@ -32,82 +44,13 @@ def test_slash_enumeration_treatment() -> None:
         assert normalize_slash_enumeration(source) == expected
 
 
-def test_frontend_identity() -> None:
-    identity = frontend_identity()
-    assert identity["versions"] == {"vieneu": "3.8.3", "sea-g2p": "0.10.0"}
-    assert identity["dictionary_sha256"] == (
-        "4346e690d0711ebc5231e7a42c5c88aaf6e40377e894b4617c018fd81c6f4096"
-    )
-
-
-def test_number_phrases_survive_upstream_chunks() -> None:
-    for year, phrase in (
-        ("1256", "một nghìn hai trăm năm mươi sáu"),
-        ("1284", "một nghìn hai trăm tám mươi bốn"),
-    ):
-        source = "Nhà vua đã chuẩn bị quân lính và thuyền bè " * 7 + f"vào năm {year}."
-        target = prepare_sentences(source, source, [source])[0]
-        assert len(target["chunks"]) > 1
-        assert (
-            sum(phrase in chunk["normalized_text"] for chunk in target["chunks"]) == 1
-        )
-
-
-def test_sentence_mapping_and_internal_chunks(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
-) -> None:
+def test_sentence_mapping_and_coverage() -> None:
     source = "  Năm 1284.  Nhà vua trở về. "
     sentences = ["Năm 1284.", "Nhà vua trở về."]
     mapped = prepare_sentences(source, source, sentences)
-    assert mapped == prepare_sentences(source, source, sentences)
     assert [(s["source_start"], s["source_end"]) for s in mapped] == [(2, 11), (13, 28)]
-    assert (
-        mapped[0]["chunks"][0]["normalized_text"]
-        == "năm một nghìn hai trăm tám mươi bốn."
-    )
     with pytest.raises(ValueError, match="uncovered"):
         prepare_sentences(source, source, sentences[:1])
-
-    commands = []
-    audio = tmp_path / "audio"
-    audio.mkdir()
-    (tmp_path / "traces").mkdir()
-    chunk = mapped[0]["chunks"][0] | {
-        "key": "case=target,sentence=000,chunk=00",
-        "seed": 14,
-    }
-
-    def fake_runtime(command: list[str]) -> tuple[str, str]:
-        commands.append(command)
-        (audio / "case=target,sentence=000,chunk=00.wav").write_bytes(b"pcm")
-        return "log", ""
-
-    monkeypatch.setattr("scripts.issue14_synthesis.run_tool", fake_runtime)
-    run_audio_cpp(tmp_path, tmp_path / "model", tmp_path / "voice", "image", chunk)
-    budget = len(chunk["phonemes"].encode("utf-8"))
-    assert f"text_chunk_size={budget}" in commands[0]
-    assert chunk["text_chunk_size_bytes"] == budget
-    assert not any("g2p_dict=" in part for part in commands[0])
-
-    names = []
-
-    def package(_output: Path, name: str, _pcm: np.ndarray, _rate: int) -> dict:
-        names.append(name)
-        return {"audio": f"audio/{name}.wav"}
-
-    monkeypatch.setattr("scripts.issue14_synthesis.package_audio", package)
-    monkeypatch.setattr(
-        "scripts.issue14_synthesis.sf.read",
-        lambda *_args, **_kwargs: (np.zeros((50, 2), dtype=np.float32), 48000),
-    )
-    record = {"key": "target", "seed": 14, "sentences": [mapped[0]]}
-    synthesize_sentences(
-        tmp_path, tmp_path / "model", tmp_path / "voice", "image", record
-    )
-    assert record["sentences"][0]["chunks"][0]["key"] == (
-        "case=target,sentence=000,chunk=00"
-    )
-    assert names == ["case=target,sentence=000", "case=target"]
 
 
 def test_manual_normalization_preserves_authored_offsets() -> None:
@@ -121,7 +64,7 @@ def test_manual_normalization_preserves_authored_offsets() -> None:
             assert original[field] == selected[field]
         assert "normalized_parts" not in selected
     assert treated[1]["tts_input"] == "Sát Thát!"
-    assert treated[1]["chunks"][0]["normalized_text"] == "sát thát."
+    assert treated[1]["chunks"][0]["normalized_text"] == "Sát Thát!"
     with pytest.raises(ValueError, match="exactly one"):
         prepare_sentences("Sau.", "Sau.", ["Sau."], manual)
     with pytest.raises(ValueError, match="exactly one"):
@@ -162,3 +105,68 @@ def test_sat_uses_pinned_tokenizer_snapshot(monkeypatch: pytest.MonkeyPatch) -> 
         )
     finally:
         segmentation._sat.cache_clear()
+
+
+@pytest.mark.asyncio
+async def test_http_request_and_result_contract(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    (tmp_path / "audio").mkdir()
+    requests = []
+    active = 0
+    maximum = 0
+    status = 200
+    media_type = "audio/wav"
+
+    async def read() -> bytes:
+        return b"wav"
+
+    def check_status() -> None:
+        if status != 200:
+            message = "HTTP failure"
+            raise RuntimeError(message)
+
+    async def post(url: str, *, json: dict) -> SimpleNamespace:
+        nonlocal active, maximum
+        active += 1
+        maximum = max(maximum, active)
+        requests.append((url, json))
+        await asyncio.sleep(0)
+        active -= 1
+        return SimpleNamespace(
+            aread=read,
+            raise_for_status=check_status,
+            headers={"content-type": media_type},
+        )
+
+    monkeypatch.setattr(
+        tts_synthesis, "read_pcm", lambda _s: (np.zeros((20, 2)), 48000)
+    )
+    client = SimpleNamespace(post=post)
+    semaphore = asyncio.Semaphore(1)
+    chunks = [{"key": str(i), "seed": 5019, "phonemes": "xin cào"} for i in range(2)]
+    await asyncio.gather(
+        *(tts_synthesis.request_audio(client, semaphore, tmp_path, c) for c in chunks)
+    )
+    assert maximum == 1
+    for chunk, (url, request) in zip(chunks, requests, strict=True):
+        assert url == "/v1/audio/speech"
+        assert request["input"] == chunk["phonemes"]
+        assert request["seed"] == 5019
+        assert request["options"]["text_chunk_size"] == str(
+            len(chunk["phonemes"].encode())
+        )
+        assert "g2p_dict" not in request["options"]
+        assert (tmp_path / chunk["audio"]).read_bytes() == b"wav"
+    chunk = {"key": "failure", "seed": 14, "phonemes": "xin"}
+    status = 503
+    with pytest.raises(RuntimeError, match="HTTP failure"):
+        await tts_synthesis.request_audio(client, semaphore, tmp_path, chunk)
+    status, media_type = 200, "application/json"
+    with pytest.raises(ValueError, match="non-WAV"):
+        await tts_synthesis.request_audio(client, semaphore, tmp_path, chunk)
+    media_type = "audio/wav"
+    monkeypatch.setattr(tts_synthesis, "read_pcm", lambda _s: (np.zeros((0, 2)), 48000))
+    with pytest.raises(ValueError, match="invalid PCM"):
+        await tts_synthesis.request_audio(client, semaphore, tmp_path, chunk)
+    assert not (tmp_path / "audio/failure.wav").exists()

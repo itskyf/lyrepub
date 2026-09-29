@@ -12,7 +12,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 
 from defusedxml import ElementTree as ET
 
-from scripts.issue14_feasibility import ogg_duration, run_tool
+from scripts.tts_benchmark import ogg_duration, run_tool
 
 OPF = "http://www.idpf.org/2007/opf"
 XHTML = "http://www.w3.org/1999/xhtml"
@@ -46,7 +46,8 @@ def write_epub(
                 result.writestr(name, content)
 
 
-def _metadata(package: Element, pathway: str) -> None:
+def publication_metadata(package: Element, pathway: str) -> None:
+    """Set metadata from declared resources and the publication's coverage."""
     metadata = package.find("p:metadata", NS)
     identifier = metadata.find("d:identifier", NS)
     identifier.set("id", package.get("unique-identifier"))
@@ -59,22 +60,30 @@ def _metadata(package: Element, pathway: str) -> None:
             f"{{{OPF}}}file-as",
         ):
             element.attrib.pop(attribute, None)
-    modified = metadata.find("p:meta[@property='dcterms:modified']", NS)
+    modified = next(
+        (
+            element
+            for element in metadata
+            if element.get("property") == "dcterms:modified"
+            and "refines" not in element.attrib
+        ),
+        None,
+    )
     if modified is None:
         modified = SubElement(
             metadata, f"{{{OPF}}}meta", {"property": "dcterms:modified"}
         )
     modified.text = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    for element in list(metadata):
+        if element.get("property", "").startswith("schema:access"):
+            metadata.remove(element)
     for prop, value in (
         ("schema:accessMode", "textual"),
-        ("schema:accessMode", "auditory"),
-        ("schema:accessMode", "visual"),
         (
             "schema:accessModeSufficient",
             "textual",
         ),
         ("schema:accessibilityFeature", "tableOfContents"),
-        ("schema:accessibilityFeature", "synchronizedAudioText"),
         ("schema:accessibilityHazard", "unknown"),
         (
             "schema:accessibilitySummary",
@@ -91,6 +100,20 @@ def _metadata(package: Element, pathway: str) -> None:
         ),
     ):
         SubElement(metadata, f"{{{OPF}}}meta", {"property": prop}).text = value
+    manifest = package.find("p:manifest", NS)
+    media_types = {item.get("media-type", "") for item in manifest}
+    if any(media.startswith("audio/") for media in media_types):
+        SubElement(
+            metadata, f"{{{OPF}}}meta", {"property": "schema:accessMode"}
+        ).text = "auditory"
+    if any(media.startswith("image/") for media in media_types):
+        SubElement(
+            metadata, f"{{{OPF}}}meta", {"property": "schema:accessMode"}
+        ).text = "visual"
+    if any(item.get("media-overlay") for item in manifest):
+        SubElement(
+            metadata, f"{{{OPF}}}meta", {"property": "schema:accessibilityFeature"}
+        ).text = "synchronizedAudioText"
 
 
 def _tts_navigation(
@@ -103,6 +126,8 @@ def _tts_navigation(
     if guide is not None:
         package.remove(guide)
     package.find("p:spine", NS).attrib.pop("toc", None)
+    if any("nav" in item.get("properties", "").split() for item in manifest):
+        return
     ncx_item = manifest.find("p:item[@media-type='application/x-dtbncx+xml']", NS)
     ncx = ET.fromstring(archive.read(posixpath.join(directory, ncx_item.get("href"))))
     ncx_ns = {"n": "http://www.daisy.org/z3986/2005/ncx/"}
@@ -172,16 +197,18 @@ def _notes(root: Element, body: Element) -> None:
             f"{{{XHTML}}}a",
             {"href": f"#{anchor.get('id')}", "role": "doc-backlink"},
         ).text = "Trở về chú thích"
+        anchor.attrib.pop("title")
 
 
-def _xhtml(root: Element, name: str, title: str) -> None:
+def _xhtml(root: Element, name: str, title: str, pathway: str) -> None:
     root.set("lang", "vi")
     root.set("{http://www.w3.org/XML/1998/namespace}lang", "vi")
     body, head = root.find("x:body", NS), root.find("x:head", NS)
-    body.attrib.pop("section", None)
+    if pathway == "alignment":
+        body.attrib.pop("section", None)
+    heading_tag = "h4" if pathway == "tts" else "h2"
     heading = next(
-        (e for e in body.iter() if e.tag in (f"{{{XHTML}}}h2", f"{{{XHTML}}}h4")),
-        None,
+        (e for e in body.iter() if e.tag == f"{{{XHTML}}}{heading_tag}"), None
     )
     doc_title = head.find("x:title", NS)
     if doc_title is None:
@@ -198,15 +225,16 @@ def _xhtml(root: Element, name: str, title: str) -> None:
         heading.tag = f"{{{XHTML}}}h1"
         heading.set("class", (heading.get("class", "") + " lyrepub-heading").strip())
     for element in root.iter():
-        if element.tag == f"{{{XHTML}}}author":
+        if pathway == "tts" and element.tag == f"{{{XHTML}}}author":
             element.tag = f"{{{XHTML}}}div"
     for link in list(head.findall("x:link", NS)):
-        if link.get("href") == "../Styles/book-style-3.css":
+        if pathway == "alignment" and link.get("href") == "../Styles/book-style-3.css":
             head.remove(link)
     for nav in root.findall(".//x:nav", NS):
         if nav.get(f"{{{EPUB}}}type") == "toc":
             nav.set("role", "doc-toc")
-    _notes(root, body)
+    if pathway == "alignment":
+        _notes(root, body)
 
 
 def _alignment_images(root: Element, title: str, author: str) -> None:
@@ -214,8 +242,7 @@ def _alignment_images(root: Element, title: str, author: str) -> None:
         if image.get("src", "").endswith("b1vz-bia-1.jpg"):
             image.set("alt", "Chân dung nhà văn Nguyễn Huy Tưởng.")
         elif image.get("src", "").endswith("hero__section_12.jpg"):
-            image.set(
-                "alt",
+            transcription = (
                 "Đêm hội Long Trì, những sinh hoạt xưa ở kinh kỳ mà trong đó, "
                 "huyên náo những cảnh lộng hành bạo ngược của chị em bà Chúa Chè "
                 "người Kinh Bắc. Những đau khổ của người dân phải chịu đựng mọi "
@@ -228,8 +255,16 @@ def _alignment_images(root: Element, title: str, author: str) -> None:
                 "Trì quanh Hồ Gươm, Hồ Tây... Nhà văn Tô Hoài. Giá: 39.000đ. "
                 "ISBN 978-604-2-01596-7. www.nxbkimdong.com.vn. "
                 "www.facebook.com/nxbkimdong. THƯ VIỆN EBOOK KIM ĐỒNG — "
-                "BECOME A MEMBER. Barcodes: 5151100030004; 8935244804317.",
+                "BECOME A MEMBER. Barcodes: 5151100030004; 8935244804317."
             )
+            image.set("alt", "Bìa sau; bản chép chữ bên dưới.")
+            image.set("aria-describedby", "lyrepub-back-cover-text")
+            body = root.find("x:body", NS)
+            description = SubElement(
+                body, f"{{{XHTML}}}div", {"id": "lyrepub-back-cover-text"}
+            )
+            SubElement(description, f"{{{XHTML}}}p").text = transcription
+
     for svg in root.findall(".//{http://www.w3.org/2000/svg}svg"):
         image = svg.find("{http://www.w3.org/2000/svg}image")
         if image is not None and image.get(
@@ -242,6 +277,20 @@ def _alignment_images(root: Element, title: str, author: str) -> None:
 def repair(source: Path, output: Path, pathway: str) -> None:
     """Apply source repairs and reviewed image alternatives to the final copy."""
     edits = {}
+    removed = (
+        {"OEBPS/toc.ncx"}
+        if pathway == "tts"
+        else {
+            "OEBPS/Fonts/SourceSansPro-Regular.ttf",
+            "OEBPS/Images/b1vz-bia-1_700.jpg",
+            "OEBPS/Images/cover.jpg",
+            "OEBPS/Images/cover_x.jpg",
+            "OEBPS/Images/featured__section_1.jpg",
+            "OEBPS/Images/featured__section_12.jpg",
+            "OEBPS/Images/hero__section_1.jpg",
+            "OEBPS/Styles/fonts-books2.css",
+        }
+    )
     with ZipFile(source) as archive:
         package_path = next(n for n in archive.namelist() if n.endswith(".opf"))
         package = ET.fromstring(archive.read(package_path))
@@ -250,15 +299,23 @@ def repair(source: Path, output: Path, pathway: str) -> None:
             package.find("p:metadata", NS),
             package.find("p:manifest", NS),
         )
+        for item in list(_manifest):
+            if (
+                pathway == "alignment"
+                and posixpath.join(directory, item.get("href")) in removed
+            ):
+                _manifest.remove(item)
         title = metadata.findtext("d:title", namespaces=NS)
         author = metadata.findtext("d:creator", namespaces=NS)
-        _metadata(package, pathway)
+        publication_metadata(package, pathway)
         if pathway == "tts":
             _tts_navigation(package, archive, edits, directory)
         for name in archive.namelist():
+            if name in removed:
+                continue
             if name.endswith((".html", ".xhtml")):
                 root = ET.fromstring(archive.read(name))
-                _xhtml(root, name, title)
+                _xhtml(root, name, title, pathway)
                 if pathway == "alignment":
                     _alignment_images(root, title, author)
                 edits[name] = tostring(root, encoding="utf-8", xml_declaration=True)
@@ -272,24 +329,46 @@ def repair(source: Path, output: Path, pathway: str) -> None:
                     package.findtext("p:metadata/d:identifier", namespaces=NS),
                 )
                 edits[name] = tostring(ncx, encoding="utf-8", xml_declaration=True)
-            elif name == "OEBPS/Styles/fonts-books2.css":
-                edits[name] = archive.read(name).replace(
-                    b"url(../Fonts/EBGaramond-Regular.woff) format('woff'), ", b""
-                )
-            elif name == "OEBPS/stylesheet.css":
+            elif pathway == "tts" and name == "OEBPS/stylesheet.css":
                 edits[name] = (
                     archive.read(name).replace(b"h4 {", b"h1 {")
                     + b"\n.-epub-media-overlay-active { background-color: #ffb; }\n"
                     b".author { color: #555; }\n.ebook { color: #555; }\n"
                 )
-            elif name == "OEBPS/Styles/Styles.css":
+            elif pathway == "alignment" and name == "OEBPS/Styles/Styles.css":
                 edits[name] = (
                     archive.read(name)
                     + b"\nh1.lyrepub-heading { font-size: 2.5em; padding-top: 12px; "
                     b"margin-bottom: 8px; }\n"
                 )
         edits[package_path] = tostring(package, encoding="utf-8", xml_declaration=True)
-    write_epub(source, output, edits, {"OEBPS/toc.ncx"} if pathway == "tts" else set())
+    write_epub(source, output, edits, removed)
+
+
+def correct_tts_source(source: Path, output: Path) -> None:
+    """Correct reviewed duplicate initials in the final TTS source copy."""
+    edits = {}
+    with ZipFile(source) as archive:
+        for name, duplicate, prefix in (
+            ("OEBPS/Text/1.html", "V", "Vừa bước vào tới cửa cung Thánh từ"),
+            ("OEBPS/Text/12.html", '"P', '"P hú quốc Cường binh sách"'),
+        ):
+            if name not in archive.namelist():
+                continue
+            root = ET.fromstring(archive.read(name))
+            body = root.find("x:body", NS)
+            paragraphs = body.findall("x:p", NS)
+            if (
+                not paragraphs[0].text.startswith(prefix)
+                or paragraphs[1].text != duplicate
+            ):
+                message = "reviewed duplicate-initial context differs from source"
+                raise ValueError(message)
+            if duplicate == '"P':
+                paragraphs[0].text = paragraphs[0].text.replace('"P hú', '"Phú', 1)
+            body.remove(paragraphs[1])
+            edits[name] = tostring(root, encoding="utf-8", xml_declaration=True)
+    write_epub(source, output, edits, set())
 
 
 def verify_alignment(frozen: Path, regenerated: Path, epub: Path) -> None:
@@ -339,6 +418,8 @@ def package_alignment(source: Path, output: Path) -> None:
         msg = "source and output EPUB must differ"
         raise ValueError(msg)
     output.mkdir(parents=True, exist_ok=True)
+    work = output / "work"
+    work.mkdir(exist_ok=True)
     edits, removed, durations = {}, set(), {}
     with ZipFile(source) as archive:
         package_path = next(n for n in archive.namelist() if n.endswith(".opf"))
@@ -349,8 +430,8 @@ def package_alignment(source: Path, output: Path) -> None:
                 posixpath.join(directory, unquote(item.get("href")))
             )
             mp3, opus = (
-                output / Path(path).name,
-                output / Path(path).with_suffix(".opus").name,
+                work / Path(path).name,
+                work / Path(path).with_suffix(".opus").name,
             )
             mp3.write_bytes(archive.read(path))
             run_tool(
@@ -393,7 +474,7 @@ def package_alignment(source: Path, output: Path) -> None:
                 audio.set("src", reference)
             edits[name] = tostring(root, encoding="utf-8", xml_declaration=True)
         edits[package_path] = tostring(package, encoding="utf-8", xml_declaration=True)
-    repackaged = output / "opus.epub"
+    repackaged = work / "opus.epub"
     write_epub(source, repackaged, edits, removed)
     repair(repackaged, output / "final.epub", "alignment")
 

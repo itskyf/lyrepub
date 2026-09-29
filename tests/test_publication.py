@@ -2,19 +2,18 @@
 
 import json
 from pathlib import Path
+from xml.etree.ElementTree import tostring
 from zipfile import ZipFile
 
-import numpy as np
 import pytest
-import soundfile as sf
 from defusedxml import ElementTree as ET
 from test_media_overlays import _source
 
 from lyrepub.epub_text import Block
-from scripts import issue17_publication as publication
-from scripts import issue17_tts as tts
-from scripts.issue14_synthesis import sha256
-from scripts.issue17_publication import NS, XHTML, repair, verify_alignment
+from scripts import publication
+from scripts import tts_publication as tts
+from scripts.publication import NS, XHTML, repair, verify_alignment
+from scripts.tts_synthesis import sha256
 
 
 def _tts_source(path: Path) -> None:
@@ -42,6 +41,11 @@ def _tts_source(path: Path) -> None:
         b'properties="nav" />',
         b"",
     )
+    root = ET.fromstring(files["OEBPS/package.opf"])
+    root.set("version", "2.0")
+    metadata = root.find("p:metadata", NS)
+    metadata.remove(metadata.find("p:meta[@property='dcterms:modified']", NS))
+    files["OEBPS/package.opf"] = tostring(root)
     with ZipFile(path, "w") as archive:
         for name, content in files.items():
             archive.writestr(name, content)
@@ -60,8 +64,6 @@ def test_full_tts_publication_and_source_preservation(
     records = tts.load_records(output)
     assert len(records) == 4
     for record in records:
-        assert "tts_input" not in record
-        assert "text" not in record["source"]
         sentence = record["sentences"][0]
         assert sentence["tts_input"] == sentence["source_text"]
         audio = f"{record['key']}.opus"
@@ -87,6 +89,15 @@ def test_full_tts_publication_and_source_preservation(
         assert [a.get("clipEnd") for a in smil.findall(".//s:audio", NS)] == [
             "1.25s"
         ] * 3
+        package = ET.fromstring(archive.read("OEBPS/package.opf"))
+        modes = package.findall("p:metadata/p:meta[@property='schema:accessMode']", NS)
+        assert {m.text for m in modes} == {"textual", "visual", "auditory"}
+        assert "synchronizedAudioText" in [
+            m.text
+            for m in package.findall(
+                "p:metadata/p:meta[@property='schema:accessibilityFeature']", NS
+            )
+        ]
     records[0]["sentences"][0]["source_text"] = "changed"
     tts.save_records(output, records)
     with pytest.raises(ValueError, match="source text drift"):
@@ -129,7 +140,6 @@ def test_tts_preparation_retains_raw_frontend_evidence(
     record = next(
         r for r in tts.load_records(output) if r["source"]["href"] == "one.xhtml"
     )
-    assert "tts_input" not in record
     assert record["raw_frontend"][0]["tts_input"] == text
     assert record["raw_frontend"][0]["source_text"] == text
     assert record["sentences"][0]["tts_input"] == "1, Một. 2, Hai."
@@ -172,11 +182,25 @@ def test_repair_preserves_ids_inline_content_and_note_text(tmp_path: Path) -> No
         svg = root.find(".//{http://www.w3.org/2000/svg}svg")
         assert svg.get("role") == "img"
         assert svg.get("aria-label").startswith("Test — ")
-        back_cover = root.findall(".//x:img", NS)[1].get("alt")
+        back_cover = root.findtext(
+            ".//x:div[@id='lyrepub-back-cover-text']/x:p", namespaces=NS
+        )
         assert "chồng chất giữa những oan khiên" in back_cover
         assert "oan oan" not in back_cover
         assert "\u201cbách tính\u201d" in back_cover
         package = ET.fromstring(archive.read("OEBPS/package.opf"))
+        assert "auditory" not in [
+            m.text
+            for m in package.findall(
+                "p:metadata/p:meta[@property='schema:accessMode']", NS
+            )
+        ]
+        assert "synchronizedAudioText" not in [
+            m.text
+            for m in package.findall(
+                "p:metadata/p:meta[@property='schema:accessibilityFeature']", NS
+            )
+        ]
         sufficient = package.findall(
             "p:metadata/p:meta[@property='schema:accessModeSufficient']", NS
         )
@@ -256,7 +280,7 @@ def test_reviewed_dash_join_keeps_the_initial_dialogue_dash(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     source = tmp_path / "source.epub"
-    source.write_bytes(b"source")
+    _tts_source(source)
     text = "- Ta chỉ sợ các con không đủ sức - Rồi người vẫy tay. Sau."
     block = Block(
         text=text,
@@ -302,44 +326,32 @@ def test_reviewed_dash_join_keeps_the_initial_dialogue_dash(
     ]
 
 
-def test_native_batch_keeps_phonemes_seed_and_exact_chunk_budget(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    (tmp_path / "audio").mkdir()
-    (tmp_path / "traces").mkdir()
-    phonemes = "xin cào"
-    record = {
-        "key": "s2-b3",
-        "source": {"spine_index": 2},
-        "seed": 2017,
-        "sentences": [
-            {"index": 0, "gaps": [], "chunks": [{"phonemes": phonemes}]},
-        ],
-    }
-
-    def runtime(command: list[str]) -> tuple[str, str]:
-        assert "--request-option" not in command
-        request_file = command[command.index("--request-sequence") + 1]
-        requests = json.loads(
-            (tmp_path / "traces" / Path(request_file).name).read_text()
-        )
-        assert len(requests) == 1
-        request = requests[0]
-        assert request["seed"] == 2017
-        assert request["text"] == phonemes
-        assert request["options"]["text_chunk_size"] == str(len(phonemes.encode()))
-        assert not any("g2p_dict" in option for option in request["options"])
-        sf.write(
-            tmp_path / "audio" / f"{request['id']}.wav", np.zeros((2400, 2)), 48000
-        )
-        return "", ""
-
-    monkeypatch.setattr(tts, "run_tool", runtime)
-    monkeypatch.setattr(tts, "package_audio", lambda *_args: {"clip_end": "0.05"})
-    tts._synthesize_chapter(
-        tmp_path, (tmp_path / "model", tmp_path / "voice", "image"), [record]
+def test_reviewed_initial_corrections_preserve_bronze_source(tmp_path: Path) -> None:
+    source, output = tmp_path / "source.epub", tmp_path / "corrected.epub"
+    chapter_one = (
+        f'<html xmlns="{XHTML}"><head><title>One</title></head><body>'
+        "<p>Vừa bước vào tới cửa cung Thánh từ, vua đã sụp lạy:</p>"
+        "<p>V</p><p>- Trình phụ hoàng.</p></body></html>"
     )
-    assert record["status"] == "ok"
-    assert record["sentences"][0]["clip_end"] == "0.05"
-    assert not list((tmp_path / "traces").glob("tmp*.json"))
+    chapter_twelve = (
+        f'<html xmlns="{XHTML}"><head><title>Twelve</title></head><body>'
+        '<p>"P hú quốc Cường binh sách" của Trần Hưng Đạo.</p>'
+        '<p>"P</p><p>Lệnh vua ban khắp nước.</p></body></html>'
+    )
+    with ZipFile(source, "w") as archive:
+        archive.writestr("OEBPS/Text/1.html", chapter_one)
+        archive.writestr("OEBPS/Text/12.html", chapter_twelve)
+    digest = sha256(source)
+    publication.correct_tts_source(source, output)
+    assert sha256(source) == digest
+    with ZipFile(output) as archive:
+        one = ET.fromstring(archive.read("OEBPS/Text/1.html"))
+        twelve = ET.fromstring(archive.read("OEBPS/Text/12.html"))
+        assert [p.text for p in one.findall("x:body/x:p", NS)] == [
+            "Vừa bước vào tới cửa cung Thánh từ, vua đã sụp lạy:",
+            "- Trình phụ hoàng.",
+        ]
+        assert [p.text for p in twelve.findall("x:body/x:p", NS)] == [
+            '"Phú quốc Cường binh sách" của Trần Hưng Đạo.',
+            "Lệnh vua ban khắp nước.",
+        ]

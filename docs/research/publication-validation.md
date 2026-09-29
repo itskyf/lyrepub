@@ -1,136 +1,180 @@
 # Final publication reproduction and validation
 
-The work contract and reviewed publication decisions are in
-[Issue #17](https://github.com/itskyf/lyrepub/issues/17).
-Generated publications, audio, reports, and review material are under
-`data/issue-17/`; they are not committed.
+[Issue #17](https://github.com/itskyf/lyrepub/issues/17) records the publication decisions.
+New reproducible outputs use `data/publications/thang-long-noi-gian/`, `data/publications/dem-hoi-long-tri/`, and `data/publications/tts-benchmark/`.
+Historical bronze inputs and frozen `data/silver/issue-14/`, `issue-14-reported/`, and `issue-15/` evidence retain their existing names and content.
+Full-book source mapping, frontend inputs, bronze block seeds, audio references, and timings are recorded in `sentences.json`; benchmark records remain `cases.json`.
+`work/` contains disposable targeting and transcoding inputs; `data/publications/diagnostics/` and `browser-review/` contain focused verification material.
 
 ## Reproduction
 
-Use fresh output directories. Set `TTS_SOURCE`, `MODEL_GGUF`,
-and `VOICE_DIR` to the existing bronze books, pinned VieNeu checkpoint, and
-Quỳnh Anh voice directory. The frozen frontend and assets are checked by the
-existing Issue #14 functions before synthesis.
+Set `TTS_SOURCE`, `MODEL_GGUF`, and `VOICE_DIR` to the existing bronze TTS book, pinned BF16 checkpoint, and Quỳnh Anh voice assets.
+Use fresh output directories for a new run.
+The Compose audio.cpp configuration loads these assets from `data/models/VieNeu-TTS-v3-Turbo-GGUF/` on CUDA with one inference thread.
+Python retains the frozen VieNeu normalization, chunking, phonemization, and audio joining; audio.cpp owns inference.
+VieNeu 3.8.3, SEA-G2P 0.10.0, and `zapros[pyreqwest]` 0.19.0 are script-local PEP 723 dependencies, not project or development dependencies.
+The inline environment also declares the pinned sentence frontend and its Torch requirement.
+Dictionary content, checkpoint, and voice hashes are verified; installed package versions are recorded as frontend provenance without redundant version assertions.
 
 ```sh
-TTS_OUT=data/issue-17/tts
-ALIGNMENT_OUT=data/issue-17/alignment
+podman compose up --detach audiocpp playwright
+curl --fail --silent http://127.0.0.1:8080/health
+curl --fail --silent 'http://127.0.0.1:8080/v1/models?include_session_options=true'
 
-OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 pixi run -e dev python -m scripts.issue17_tts \
-  prepare --source "$TTS_SOURCE" --output "$TTS_OUT"
-pixi run -e dev python -m scripts.issue17_tts synthesize \
-  --output "$TTS_OUT" --model "$MODEL_GGUF" --voice "$VOICE_DIR"
-pixi run -e dev python -m scripts.issue17_tts publish \
+TTS_OUT=data/publications/thang-long-noi-gian
+ALIGNMENT_OUT=data/publications/dem-hoi-long-tri
+BENCHMARK_OUT=data/publications/tts-benchmark
+
+PYTHONPATH=src:. pixi run -e dev uv run --script scripts/tts_benchmark.py \
+  prepare --source-epub "$TTS_SOURCE" --output "$BENCHMARK_OUT"
+PYTHONPATH=src:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  pixi run -e dev uv run --script scripts/tts_benchmark.py synthesize \
+  --output "$BENCHMARK_OUT" --model "$MODEL_GGUF" --voice-dir "$VOICE_DIR"
+PYTHONPATH=src:. pixi run -e dev uv run --script scripts/tts_benchmark.py \
+  compare --output "$BENCHMARK_OUT" --frozen data/silver/issue-14
+
+PYTHONPATH=src:. OMP_NUM_THREADS=1 MKL_NUM_THREADS=1 \
+  pixi run -e dev uv run --script scripts/tts_publication.py prepare \
   --source "$TTS_SOURCE" --output "$TTS_OUT"
+PYTHONPATH=src:. pixi run -e dev uv run --script scripts/tts_publication.py \
+  synthesize --output "$TTS_OUT" --model "$MODEL_GGUF" --voice "$VOICE_DIR" \
+  --concurrency 1
+PYTHONPATH=src:. pixi run -e dev uv run --script scripts/tts_publication.py \
+  publish --source "$TTS_SOURCE" --output "$TTS_OUT"
 
-align process data/bronze/9786326186253 "$ALIGNMENT_OUT/processed-audio" \
+mkdir --parents "$ALIGNMENT_OUT/work"
+align process data/bronze/9786326186253 "$ALIGNMENT_OUT/work/processed-audio" \
   --log-level info
 align align --ctc --emissions data/silver/issue-15/emissions \
-  --audiobook "$ALIGNMENT_OUT/processed-audio" \
+  --audiobook "$ALIGNMENT_OUT/work/processed-audio" \
   --epub data/silver/issue-15/markedup.epub --language vi --granularity sentence \
   --reports "$ALIGNMENT_OUT/report.json" \
-  --output "$ALIGNMENT_OUT/regenerated.epub" --time --log-level info
-pixi run -e dev python -m scripts.issue17_publication \
-  --source "$ALIGNMENT_OUT/regenerated.epub" --output "$ALIGNMENT_OUT" \
+  --output "$ALIGNMENT_OUT/work/regenerated.epub" --time --log-level info
+pixi run -e dev python -m scripts.publication \
+  --source "$ALIGNMENT_OUT/work/regenerated.epub" --output "$ALIGNMENT_OUT" \
   --frozen-report data/silver/issue-15/report.json \
   --regenerated-report "$ALIGNMENT_OUT/report.json"
 ```
 
-The alignment command consumes retained emissions; it does not generate them.
-Storyteller 0.2.4 and Node.js 26.10.0 reproduced the frozen report exactly.
-The report records spans rather than every sentence timestamp. Verification
-checks those span boundaries and the four previously recorded manual timing
-boundaries; it does not claim an independent historical reference for every
-sentence. All 3,382 regenerated SMIL `par` identities, text references, and
-timing strings remained identical through final packaging.
+One Zapros async client with `AsyncPyreqwestHandler` and one semaphore serve the complete synthesis run.
+`--concurrency` must be positive and defaults to one; the server serializes inference for its loaded model.
+Every request carries the prepared phonemes, bronze block seed, exact UTF-8 chunk budget, and frozen sampling options.
+HTTP errors, non-WAV responses, invalid PCM, and preprocessing failures stop the run and remain in its records.
+Completed blocks can resume only with the same verified runtime.
+No Python inference fallback is provided.
+Alignment consumes retained emissions rather than rerunning inference, and verifies the frozen report spans and four recorded manual timing boundaries.
+The regenerated report matches the frozen report, and all 3,382 SMIL timing and text-reference tuples remain unchanged through Opus packaging.
 
-Native audio.cpp request sequences amortize model loading over each TTS spine
-document. Every prepared phoneme chunk retains its own frozen block seed and
-exact UTF-8 chunk budget. A two-request probe produced byte-identical 48 kHz
-stereo PCM to the existing single-request CLI path, including the repeated
-request. Request JSON is temporary runtime input, not a second text corpus.
-VieNeu/SEA-G2P chunk joining and final Opus duration measurement reuse Issue #14.
-FFmpeg/ffprobe 9.0.2 performs the publication Opus encoding and duration checks.
-Completed spine documents can be resumed with the same verified runtime.
+## Runtime and benchmark comparison
 
-## Automated checks
+The inspected Compose audio.cpp image is `15034226bb05d727758cc455ece59cf5fe50a7452ad1f189c7edb77951d37e79`, built from upstream revision `f99bd1e1f393999a3ce8abf5029b1e1d9af1cfe1`.
+The original frozen evidence used revision `955c8725c611d511774e6be132aff6609163b2d2`; the current comparison is reported separately and does not redefine that evidence.
+`runtime.json` records the actual Compose image and digest, loaded `vieneu_v3_turbo` model path, server configuration, frozen asset hashes, sampling options, and separate Python frontend provenance before synthesis.
+The loaded model is `vieneu-v3-turbo-bf16.gguf` with Quỳnh Anh conditioning, CUDA, and the frozen 0.8 temperature, top-k 25, top-p 0.95, 1.2 repetition penalty, 64-frame repetition window, 300-token cap, and two babble retries.
+The server comparison preserves all 118 frozen sentence inputs, frontend chunks, source mappings, and clip durations.
+Decoded Opus PCM matches for 117 sentences; `s5-b9` sentence 39 reproduces the previously reviewed full-run recording rather than the older isolated recording.
+A focused curl repeat produces the same raw PCM as the server benchmark and previous full run.
+The differing older isolated waveform is retained, so byte-identical reproduction of all frozen recordings is not claimed.
+`benchmark-comparison.json` records each sentence comparison.
+The reviewed full-book recording is checked separately from the frozen benchmark.
+All 3,031 blocks and 10,341 sentence clips complete through the server without synthesis failures.
+Of the 10,340 unchanged sentences, 10,337 regenerated WAV clips match the reviewed full run byte-for-byte.
+Three unchanged sentence waveforms differ: `s10-b4` sentence 1, `s14-b4` sentence 0, and `s21-b4` sentence 0.
+Their duration differences are 0.160, -0.240, and 0.000 seconds, respectively, and focused curl repeats reproduce all three server PCM results exactly.
+Their authored text, phonemes, seeds, sampling settings, checkpoint, voice assets, and Python frontend are identical to the earlier reviewed run.
+The [upstream runtime comparison](https://github.com/0xshug0/audio.cpp/compare/955c8725c611d511774e6be132aff6609163b2d2...f99bd1e1f393999a3ce8abf5029b1e1d9af1cfe1) contains shared sampler and prefill changes but no VieNeu model-source changes; the exact cause of the waveform differences is not established.
+The server execution path is retained, and no new audio-quality acceptance is inferred from these repeatability checks.
+
+## Reviewed source repairs and accessibility
+
+The final TTS source corrects the opening `"P hú` to `"Phú` in chapter 12 and removes its duplicate standalone `"P` paragraph.
+The chapter 1 standalone `V` duplicates the initial of the immediately preceding complete sentence beginning "Vừa bước vào tới cửa cung Thánh từ" and is removed without changing that sentence or the following dialogue.
+`corrected-source.epub` and its checksum make these final-publication changes explicit; source offsets refer to this corrected copy while inference seeds retain the corresponding bronze block indices.
+These edits do not change bronze inputs or frozen benchmark evidence, and exact-text preservation is claimed only outside the reviewed corrections.
+The reviewed punctuation joins remain source-preserving sentence-boundary joins.
+All other previously reviewed TTS audio is accepted.
+Alignment title-attribute notes become linked footnotes with backlinks and their original text; duplicate title attributes are removed after materialization.
+The reviewed back-cover transcription is ordinary visible text referenced by a short image alternative, rather than an oversized `alt` attribute.
+This transcription is absent from the audiobook, and no narration is added to the alignment pathway.
+Source-specific XHTML and stylesheet repairs are limited to their respective publications.
+Access modes follow actual image and audio resources, and synchronized-audio metadata requires Media Overlay references.
+Textual access is declared sufficient; auditory access is not declared sufficient for the alignment book's unmatched or unaudiobooked content.
+Automated results do not establish completed human accessibility review or accessibility conformance.
+
+## Automated validation and package inspection
 
 ```sh
-pixi run -e dev python -m pytest -q tests/test_issue17_publication.py \
-  tests/test_issue14_feasibility.py tests/test_sentence_targets.py \
-  tests/test_media_overlays.py
+pixi run -e dev python -m pytest -q tests/test_publication.py \
+  tests/test_tts_benchmark.py tests/test_sentence_targets.py tests/test_media_overlays.py
 pixi run -e dev python -m pytest -q
 hk check --pr
 
-for pathway in tts alignment; do
-  podman run --rm --security-opt label=disable -v "$PWD/data:/data:ro" \
-    localhost/lyrepub-epubcheck:5.4.0 \
-    "/data/issue-17/$pathway/final.epub"
-  podman run --rm --userns=keep-id:uid=10042,gid=999 \
-    --security-opt label=disable -v "$PWD/data:/data" \
-    localhost/lyrepub-ace:1.4.6 \
-    "/data/issue-17/$pathway/final.epub" \
-    -o "/data/issue-17/$pathway/ace" --force
+for book in thang-long-noi-gian dem-hoi-long-tri; do
+  podman compose run --rm --volume "$PWD/data:/data:ro,z" epubcheck \
+    "/data/publications/$book/final.epub"
+  podman compose run --rm --volume "$PWD/data:/data:z" ace \
+    "/data/publications/$book/final.epub" \
+    --outdir "/data/publications/$book/ace" --force
 done
 ```
 
-The Ace user mapping uses the image's existing Puppeteer browser and permits
-report writes to the host directory. No reader or browser is installed on
-the host. The same image can produce focused screenshots from extracted final
-XHTML for visual review.
+Normal pytest checks reusable source mapping, coverage, approved punctuation joins, HTTP request/results, Opus packaging, manifest/SMIL references, and frozen alignment timings without importing standalone frontend packages.
+The focused suite passes 28 tests, the full suite passes 39 tests, and `hk check --pr` passes.
+All 280 files in the retained frozen-evidence checksum inventory remain unchanged.
+Actual frontend and inference integration runs through the inline-uv benchmark and publication commands.
+Both final EPUBs pass Compose EPUBCheck with zero errors and warnings and Ace with no automated findings.
+Package inspection checks ZIP sizes and duplicate entries, manifest resources, local references, reachable assets, audio references, and overlay duration totals.
+Eight unused alignment source resources, including three byte-identical image variants, are removed from the final package while its referenced cover, portrait, transcription, and seven audio tracks remain available.
+The alignment package has 38 resources, 35 manifest entries, seven referenced Opus tracks, and 3,382 clips totaling 16,446.44 seconds of overlay intervals.
+It contains 167,904,216 file bytes, with 167,899,244 compressed and 170,887,627 uncompressed resource bytes.
+Its encoded audio tracks total 16,446.603229 seconds, and package inspection finds no missing manifest resources, missing local references, duplicate entries, byte-identical resources, unreferenced audio, or unreachable manifest resources.
+The TTS package has 10,399 file resources, 10,396 manifest entries, 10,341 referenced Opus clips, and 26 SMIL documents.
+It contains 610,169,975 file bytes, with 608,510,335 compressed and 612,212,688 uncompressed resource bytes.
+Its encoded audio resources total 43,891.6765 seconds; the rounded overlay intervals total 43,886.506 seconds.
+Its three original ZIP directory markers are listed separately from file resources.
+It has no missing references or manifest resources, unmanifested files, duplicate entries, byte-identical file resources, unreferenced audio, or unreachable manifest resources.
+Final package inventories are retained as `package-inspection.json` beside each EPUB.
 
-Before and after publication work, SHA-256 checks covered all 280 retained
-files under `data/silver/issue-14/`, `data/silver/issue-14-reported/`, and
-`data/silver/issue-15/`. The originals remain unchanged.
+## Readest validation
 
-## Human review material
+The repository Playwright service uses `mcr.microsoft.com/playwright:v1.63.0` and Playwright 1.63.0 `run-server`, with `init`, Chromium host IPC, and a loopback-published port 3000.
+Its healthcheck probes that local server port without launching a browser; the 60-second startup allowance follows [Playwright's web-server default](https://playwright.dev/docs/test-webserver).
+The mise-managed CLI 0.1.19 supplies a compatible Playwright 1.63 client.
+Its npm release and integrity were checked against the upstream tag and npm registry before adding narrowly versioned provenance exceptions for that release and its two published alpha dependencies.
+The remote configuration explicitly selects Chromium through the server's supported endpoint query and creates an isolated context.
+No browser is installed on the host, and EPUBs transfer through the CLI upload operation without an EPUB volume mount.
 
-Alignment review material includes the final EPUB, extracted final XHTML,
-author/chapter/note screenshots, source images, reviewed image alternatives,
-and 16 kHz mono PCM WAV excerpts decoded from the final Opus tracks.
-The excerpts cover source-track intervals 65.9–122.7 and 467.8–529 seconds
-on track 1, 0–34 seconds on track 2, 904–950.5 seconds on track 6, and the
-spoken-note context at 1075.5–1125.9 seconds on track 2.
-These excerpts support final listening; they do not replace alignment inputs
-or establish new timing references.
+Create `data/publications/browser-review/` and save the following JSON as `cli.config.json` there.
 
-The source's title-attribute notes are exposed as linked footnotes with
-backlinks in the final copy. Their exact note text and original sentence IDs
-remain available. Image-only back-cover content requires reviewed text
-alternatives. Accessibility summaries retain known synchronization limitations
-and do not assert completed human review.
+```json
+{
+  "browser": {
+    "browserName": "chromium",
+    "isolated": true,
+    "remoteEndpoint": "ws://127.0.0.1:3000/?browser=chromium"
+  }
+}
+```
 
-The user reviewed the cover/portrait alternatives and confirmed the back-cover
-readings "chồng chất" and "oan khiên" against magnified original pixels.
-The final image alternative contains the reviewed transcription. This text is
-absent from the audiobook; auditory access is not declared sufficient. No audio
-was added to the alignment pathway. The repaired alignment EPUB currently has
-zero EPUBCheck errors/warnings and no automated Ace findings.
+```sh
+playwright-cli -s=readest open https://web.readest.com/ \
+  --config=data/publications/browser-review/cli.config.json
+playwright-cli -s=readest snapshot
+# Select Import Books, then From Local File using the snapshot refs.
+playwright-cli -s=readest upload data/publications/dem-hoi-long-tri/final.epub
+playwright-cli -s=readest snapshot
+playwright-cli -s=readest console
+playwright-cli -s=readest requests
+```
 
-All 118 frozen benchmark sentences retain their source ranges, synthesis inputs,
-normalized chunks, phonemes, and clip durations in the full TTS run. Decoded Opus
-PCM matches for 117; `s5-b9` sentence 39 differs despite those matching settings.
-The diagnostic comparison is retained in `tts/benchmark-preservation.json`, with
-both recordings linked in `review.html`. An isolated single request and a
-two-request native batch both reproduced the frozen PCM exactly; the full-spine
-batch recording differs. Those probes are retained in
-`tts/single-request-diagnostic/` and `tts/isolated-batch-diagnostic/`. The cause
-of the full-spine difference remains unresolved; byte-identical full-book
-synthesis is not claimed.
-
-Full TTS synthesis completed all 3,033 source blocks and 10,343 sentences.
-The packaged EPUB preserves every authored body character in all 26 source
-documents; its 10,343 unique overlay clips match the measured sentence audio.
-The complete TTS EPUB passed EPUBCheck with zero errors and warnings.
-Its final Ace run completed with no automated findings. The large sentence-audio
-manifest makes Ace package parsing slow; allow the full run to complete.
-Validation logs are retained in
-`tts/epubcheck.txt` and `tts/ace.txt`.
-
-The latest focused suite passed 28 tests; the full suite passed 39;
-`hk check --pr` passed. `review.html` links both complete EPUBs, decoded alignment
-excerpts, TTS spot checks, and visual samples. The TTS screenshots use XHTML
-identical to the final publication. The inherited standalone "V" at chapter 1
-and "P hú quốc Cường binh sách"/stray "P" at chapter 12 remain unchanged for
-content review. Reader synchronization, listening, and final accessibility
-review remain pending; no completed human review or conformance is asserted.
+Readest import and playback checks are focused validation evidence, not a new browser test suite.
+The original 168,645,341-byte alignment package remains at "Loading…" after successful file transfer; snapshots, console logs, and request inspection were retained before removing unused resources.
+The cleaned 167,904,216-byte alignment package also remains at "Loading…" after ten minutes, and a retry after reloading the page remains there for over an hour.
+The final 610,169,975-byte TTS EPUB transfers successfully through the same real import flow and remains at "Loading…" for over ten minutes.
+Neither final book completes import or becomes available to open, so final rendering, navigation, corrected-text presentation, synchronized playback, and highlighting cannot be checked in Readest.
+The observed import consoles contain no EPUB parsing error; request inspection again records the blocked worker request without establishing its causal role.
+A separate bronze source control imports successfully; its first opening times out fetching Readest's reader-page JavaScript chunk, and reload recovers the reader.
+A blocked service-worker request and an unrelated analytics DNS failure are recorded but are not established as causes of the final-publication import hang.
+The valid package and successful source control distinguish this observed reader/import limitation from evidence of malformed EPUB resources, without proving its exact cause.
+Audio quality and reviewed sentence-level synchronization are unchanged by this investigation.
+The PR remains draft until final reader rendering, navigation, synchronized playback/highlighting, and remaining human accessibility checks can be completed.

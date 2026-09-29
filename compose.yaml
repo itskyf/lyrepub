@@ -3,33 +3,37 @@ x-audiocpp-build: &audiocpp-build
   dockerfile: containers/Containerfile.audiocpp
 
 services:
+  playwright:
+    image: mcr.microsoft.com/playwright:v1.63.0
+    init: true
+    ipc: host
+    ports:
+      - target: 3000
+        published: "3000"
+        host_ip: 127.0.0.1
+        protocol: tcp
+    command: [npx, --yes, playwright@1.63.0, run-server, --port, "3000", --host, 0.0.0.0]
+    healthcheck:
+      test: [CMD, node, --eval, "const s = require('net').connect(3000, '127.0.0.1'); s.on('connect', () => { s.end(); process.exit(0); }); s.on('error', () => process.exit(1)); s.setTimeout(1000, () => process.exit(1));"]
+      start_period: 60s # Playwright's webServer startup allowance is 60 seconds.
+      start_interval: 1s # Check each second so clients can connect as soon as the port opens.
+
   audiocpp:
     build:
       <<: *audiocpp-build
       target: server
-
     userns_mode: "keep-id:uid=1000,gid=1000"
-
     devices:
       - nvidia.com/gpu=all
-
     ports:
       - target: 8080
         published: "8080"
         host_ip: 127.0.0.1
         protocol: tcp
-
     volumes:
-      - type: bind
-        source: ./data/models
-        target: /app/models
-        read_only: true
-        bind:
-          create_host_path: false
-          selinux: z
-
-    command: [server, --config, /app/server.json, --host, 0.0.0.0, --backend, cuda]
-
+      - ./data/models:/app/models:ro,z
+      - ./containers/audiocpp.json:/app/server.json:ro,z
+    command: [server, --config, /app/server.json, --ui]
     healthcheck:
       test: [CMD, curl, --fail, --silent, --show-error, --output, /dev/null, http://127.0.0.1:8080/health]
       start_period: 60s # audio.cpp's readiness helper allows up to 60s for startup.
@@ -39,20 +43,11 @@ services:
     build:
       <<: *audiocpp-build
       target: base
-
     profiles:
       - tools
-
     userns_mode: "keep-id:uid=1000,gid=1000"
-
     volumes:
-      - type: bind
-        source: ./data/models
-        target: /app/models
-        bind:
-          create_host_path: false
-          selinux: z
-
+      - ./data/models:/app/models:z
     entrypoint: [/app/entrypoint.sh, model-manager]
 
   epubcheck:
@@ -64,6 +59,7 @@ services:
       - tools
 
   ace:
+    userns_mode: "keep-id:uid=10042,gid=999"
     build:
       context: containers
       dockerfile: Containerfile.ace
