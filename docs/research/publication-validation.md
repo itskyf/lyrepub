@@ -122,7 +122,9 @@ Full TTS synthesis completed all 3,033 source blocks and 10,343 sentences.
 The packaged EPUB preserves every authored body character in all 26 source
 documents; its 10,343 unique overlay clips match the measured sentence audio.
 The complete TTS EPUB passed EPUBCheck with zero errors and warnings.
-Its final Ace run is in progress. Validation logs are retained in
+Its final Ace run completed with no automated findings. The large sentence-audio
+manifest makes Ace package parsing slow; allow the full run to complete.
+Validation logs are retained in
 `tts/epubcheck.txt` and `tts/ace.txt`.
 
 The latest focused suite passed 28 tests; the full suite passed 39;
