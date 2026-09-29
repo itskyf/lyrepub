@@ -76,7 +76,9 @@ Agent packages declared in `apm.yml` are installed with [APM](https://microsoft.
 apm install
 ```
 
-## audio.cpp
+## Containers
+
+### audio.cpp
 
 The Compose provider is managed with mise. Podman and NVIDIA CDI remain host prerequisites.
 
@@ -90,7 +92,7 @@ podman compose up audiocpp
 
 The WebUI is available at `http://127.0.0.1:8080`.
 
-## Validators
+### Validators
 
 EPUBCheck and Ace are available as Compose tools:
 
