@@ -109,6 +109,33 @@ def test_tts_rejects_incomplete_coverage_and_synthesis(
         tts.publish(source, output)
 
 
+def test_tts_preparation_retains_raw_frontend_evidence(
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    source, output = tmp_path / "source.epub", tmp_path / "tts"
+    files = _source(source)
+    text = "1/ Một. 2/ Hai."
+    files["OEBPS/one.xhtml"] = (
+        f'<html xmlns="{XHTML}"><head><title>One</title></head>'
+        f"<body><p>{text}</p></body></html>"
+    ).encode()
+    with ZipFile(source, "w") as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    digest = sha256(source)
+    monkeypatch.setattr(tts, "segment_sentences", lambda text: [text])
+    tts.prepare(source, output)
+    record = next(
+        r for r in tts.load_records(output) if r["source"]["href"] == "one.xhtml"
+    )
+    assert "tts_input" not in record
+    assert record["raw_frontend"][0]["tts_input"] == text
+    assert record["raw_frontend"][0]["source_text"] == text
+    assert record["sentences"][0]["tts_input"] == "1, Một. 2, Hai."
+    assert sha256(source) == digest
+
+
 def test_repair_preserves_ids_inline_content_and_note_text(tmp_path: Path) -> None:
     source, output = tmp_path / "source.epub", tmp_path / "final.epub"
     files = _source(source)

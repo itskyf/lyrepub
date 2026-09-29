@@ -50,6 +50,7 @@ exact UTF-8 chunk budget. A two-request probe produced byte-identical 48 kHz
 stereo PCM to the existing single-request CLI path, including the repeated
 request. Request JSON is temporary runtime input, not a second text corpus.
 VieNeu/SEA-G2P chunk joining and final Opus duration measurement reuse Issue #14.
+FFmpeg/ffprobe 9.0.2 performs the publication Opus encoding and duration checks.
 Completed spine documents can be resumed with the same verified runtime.
 
 ## Automated checks
@@ -105,3 +106,29 @@ The final image alternative contains the reviewed transcription. This text is
 absent from the audiobook; auditory access is not declared sufficient. No audio
 was added to the alignment pathway. The repaired alignment EPUB currently has
 zero EPUBCheck errors/warnings and no automated Ace findings.
+
+All 118 frozen benchmark sentences retain their source ranges, synthesis inputs,
+normalized chunks, phonemes, and clip durations in the full TTS run. Decoded Opus
+PCM matches for 117; `s5-b9` sentence 39 differs despite those matching settings.
+The diagnostic comparison is retained in `tts/benchmark-preservation.json`, with
+both recordings linked in `review.html`. An isolated single request and a
+two-request native batch both reproduced the frozen PCM exactly; the full-spine
+batch recording differs. Those probes are retained in
+`tts/single-request-diagnostic/` and `tts/isolated-batch-diagnostic/`. The cause
+of the full-spine difference remains unresolved; byte-identical full-book
+synthesis is not claimed.
+
+Full TTS synthesis completed all 3,033 source blocks and 10,343 sentences.
+The packaged EPUB preserves every authored body character in all 26 source
+documents; its 10,343 unique overlay clips match the measured sentence audio.
+The complete TTS EPUB passed EPUBCheck with zero errors and warnings.
+Its final Ace run is in progress. Validation logs are retained in
+`tts/epubcheck.txt` and `tts/ace.txt`.
+
+The latest focused suite passed 28 tests; the full suite passed 39;
+`hk check --pr` passed. `review.html` links both complete EPUBs, decoded alignment
+excerpts, TTS spot checks, and visual samples. The TTS screenshots use XHTML
+identical to the final publication. The inherited standalone "V" at chapter 1
+and "P hú quốc Cường binh sách"/stray "P" at chapter 12 remain unchanged for
+content review. Reader synchronization, listening, and final accessibility
+review remain pending; no completed human review or conformance is asserted.
