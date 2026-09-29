@@ -1,6 +1,6 @@
 """Synthetic EPUB Media Overlay publication checks."""
 
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from xml.etree.ElementTree import Element, SubElement, tostring
 from zipfile import ZIP_STORED, ZipFile
@@ -8,7 +8,8 @@ from zipfile import ZIP_STORED, ZipFile
 import pytest
 from defusedxml import ElementTree
 
-from lyrepub.epub_media_overlays import Timing, publish_media_overlays
+from lyrepub.epub_media_overlays import Timing, _clock, publish_media_overlays
+from lyrepub.epub_text import materialize_sentence_targets, parse_blocks
 
 _OPF = "http://www.idpf.org/2007/opf"
 _SMIL = "http://www.w3.org/ns/SMIL"
@@ -108,18 +109,33 @@ def audio(tmp_path: Path) -> Path:
 
 def _timings() -> list[Timing]:
     return [
-        Timing("one.xhtml#last", "audio/tone.opus", 0.3, 0.4),
-        Timing("two.xhtml#second", "audio/tone.opus", 0.2, 0.3),
-        Timing("two.xhtml#first", "audio/tone.opus", 0.0, 0.2),
+        Timing(
+            "one.xhtml#last",
+            "audio/tone.opus",
+            timedelta(milliseconds=300),
+            timedelta(milliseconds=400),
+        ),
+        Timing(
+            "two.xhtml#second",
+            "audio/tone.opus",
+            timedelta(milliseconds=200),
+            timedelta(milliseconds=300),
+        ),
+        Timing(
+            "two.xhtml#first",
+            "audio/tone.opus",
+            timedelta(0),
+            timedelta(milliseconds=200),
+        ),
     ]
 
 
 def test_publish_orders_and_preserves(tmp_path: Path, audio: Path) -> None:
     source, output = tmp_path / "source.epub", tmp_path / "output.epub"
     original = _source(source)
-    before = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    before = datetime.now(UTC).replace(microsecond=0)
     publish_media_overlays(source, output, _timings(), {"audio/tone.opus": audio})
-    after = datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
+    after = datetime.now(UTC).replace(microsecond=0)
 
     with ZipFile(output) as archive:
         for name, content in original.items():
@@ -150,9 +166,9 @@ def test_publish_orders_and_preserves(tmp_path: Path, audio: Path) -> None:
         assert metas[("#lyrepub-smil-1", "media:duration")] == "0.1s"
         assert metas[(None, "media:duration")] == "0.4s"
         assert metas[("#uid", "dcterms:modified")] == "2020-01-01T00:00:00Z"
-        modified = metas[(None, "dcterms:modified")]
+        modified = datetime.fromisoformat(metas[(None, "dcterms:modified")])
         assert before <= modified <= after
-        assert modified != "2026-09-27T00:00:00Z"
+        assert modified != datetime(2026, 9, 27, tzinfo=UTC)
         first = ElementTree.fromstring(archive.read("OEBPS/two.smil"))
         second = ElementTree.fromstring(archive.read("OEBPS/one.smil"))
         assert first.tag == f"{{{_SMIL}}}smil"
@@ -169,7 +185,7 @@ def test_publish_orders_and_preserves(tmp_path: Path, audio: Path) -> None:
             )
             for p in pars
         ] == [
-            ("audio/tone.opus", "0.0s", "0.2s"),
+            ("audio/tone.opus", "0s", "0.2s"),
             ("audio/tone.opus", "0.2s", "0.3s"),
         ]
         assert (
@@ -182,27 +198,49 @@ def test_publish_orders_and_preserves(tmp_path: Path, audio: Path) -> None:
     ("timing", "audio_name", "message"),
     [
         (
-            Timing("two.xhtml#missing", "audio/tone.opus", 0, 0.1),
+            Timing(
+                "two.xhtml#missing",
+                "audio/tone.opus",
+                timedelta(0),
+                timedelta(milliseconds=100),
+            ),
             "tone.opus",
             "unresolvable XHTML target",
         ),
         (
-            Timing("two.xhtml#first", "audio/tone.opus", 1, 1),
+            Timing(
+                "two.xhtml#first",
+                "audio/tone.opus",
+                timedelta(seconds=1),
+                timedelta(seconds=1),
+            ),
             "tone.opus",
             "invalid clip times",
         ),
         (
-            Timing("two.xhtml#first", "audio/tone.opus", float("nan"), 1),
+            Timing(
+                "two.xhtml#first", "audio/tone.opus", float("nan"), timedelta(seconds=1)
+            ),
             "tone.opus",
             "invalid clip times",
         ),
         (
-            Timing("two.xhtml#first", "audio/missing.opus", 0, 0.1),
+            Timing(
+                "two.xhtml#first",
+                "audio/missing.opus",
+                timedelta(0),
+                timedelta(milliseconds=100),
+            ),
             "missing.opus",
             "missing audio file",
         ),
         (
-            Timing("two.xhtml#first", "audio/tone.wav", 0, 0.1),
+            Timing(
+                "two.xhtml#first",
+                "audio/tone.wav",
+                timedelta(0),
+                timedelta(milliseconds=100),
+            ),
             "tone.opus",
             "unsupported EPUB",
         ),
@@ -217,4 +255,150 @@ def test_invalid_inputs(
     with pytest.raises(ValueError, match=message):
         publish_media_overlays(
             source, tmp_path / "out.epub", [timing], {timing.audio_href: supplied}
+        )
+
+
+@pytest.mark.parametrize(
+    ("duration", "clock"),
+    [
+        (timedelta(0), "0s"),
+        (timedelta(microseconds=1), "0.000001s"),
+        (timedelta(seconds=4, milliseconds=166), "4.166s"),
+        (timedelta(days=1, seconds=1, microseconds=1), "86401.000001s"),
+    ],
+)
+def test_clock_serializes_timedelta_exactly(duration: timedelta, clock: str) -> None:
+    assert _clock(duration) == clock
+
+
+def test_sentence_target_publication(tmp_path: Path) -> None:
+    source, output = tmp_path / "targets.epub", tmp_path / "sentence-targets.epub"
+    files = _source(source)
+    timings = []
+    expected = {}
+    authored = {}
+    for spine_index, (href, body, sentences) in enumerate(
+        [
+            (
+                "two.xhtml",
+                (
+                    '<h2>Chapter.</h2><p> First <em class="voice">bold. Second</em>'
+                    " word<br/>end. </p>"
+                ),
+                [["Chapter."], ["First bold.", "Second word end."]],
+            ),
+            (
+                "one.xhtml",
+                (
+                    '<h2 id="heading">Last chapter.</h2>'
+                    '<p xml:lang="en">Last sentence.</p>'
+                ),
+                [["Last chapter."], ["Last sentence."]],
+            ),
+        ]
+    ):
+        original = (
+            f'<html xmlns="{_XHTML}" xml:lang="vi"><head><title>Test</title></head>'
+            f"<body>{body}</body></html>"
+        )
+        authored[href] = original
+        blocks = parse_blocks(original, spine_index, href, linear=True)
+        targets = []
+        for block, texts in zip(blocks, sentences, strict=True):
+            cursor = 0
+            for index, text in enumerate(texts):
+                start = block.text.index(text, cursor)
+                cursor = start + len(text)
+                targets.append((block, index, start, cursor, text))
+        content, hrefs = materialize_sentence_targets(original, targets)
+        files[f"OEBPS/{href}"] = content
+        expected[href] = hrefs
+        for text_href in hrefs:
+            begin = timedelta(milliseconds=200 * len(timings))
+            timings.append(
+                Timing(
+                    text_href,
+                    "audio/tone.opus",
+                    begin,
+                    begin + timedelta(milliseconds=200),
+                )
+            )
+    with ZipFile(source, "w") as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    audio_path = Path(__file__).with_name("fixtures") / "silence.opus"
+    publish_media_overlays(
+        source, output, timings[::-1], {"audio/tone.opus": audio_path}
+    )
+    with ZipFile(output) as archive:
+        for href, hrefs in expected.items():
+            assert archive.read(f"OEBPS/{href}") == files[f"OEBPS/{href}"]
+            smil = ElementTree.fromstring(archive.read(f"OEBPS/{href[:-6]}.smil"))
+            pars = smil.findall(f"{{{_SMIL}}}body/{{{_SMIL}}}par")
+            assert [par.find(f"{{{_SMIL}}}text").get("src") for par in pars] == hrefs
+            document = ElementTree.fromstring(archive.read(f"OEBPS/{href}"))
+            heading = document.find(f".//{{{_XHTML}}}h2")
+            assert hrefs[0] == f"{href}#{heading.get('id')}"
+            before = parse_blocks(authored[href], 0, href, linear=True)
+            after = parse_blocks(files[f"OEBPS/{href}"], 0, href, linear=True)
+            assert " ".join(block.text for block in before) == " ".join(
+                block.text for block in after
+            )
+            for par, text_href in zip(pars, hrefs, strict=True):
+                timing = next(
+                    timing for timing in timings if timing.text_href == text_href
+                )
+                audio_element = par.find(f"{{{_SMIL}}}audio")
+                assert audio_element.get("clipBegin") == _clock(timing.clip_begin)
+                assert audio_element.get("clipEnd") == _clock(timing.clip_end)
+        opf = ElementTree.fromstring(archive.read("OEBPS/package.opf"))
+        items = opf.findall(f"{{{_OPF}}}manifest/{{{_OPF}}}item")
+        overlays = [
+            item for item in items if item.get("media-type") == "application/smil+xml"
+        ]
+        assert [item.get("href") for item in overlays] == ["two.smil", "one.smil"]
+        durations = {
+            meta.get("refines"): meta.text
+            for meta in opf.findall(f"{{{_OPF}}}metadata/{{{_OPF}}}meta")
+            if meta.get("property") == "media:duration"
+        }
+        assert durations == {
+            "#lyrepub-smil-0": "0.6s",
+            "#lyrepub-smil-1": "0.4s",
+            None: "1s",
+        }
+
+
+@pytest.mark.parametrize(
+    ("begin", "end"),
+    [
+        (timedelta(seconds=-1), timedelta(seconds=1)),
+        (timedelta(seconds=2), timedelta(seconds=1)),
+        ("0.000", timedelta(seconds=1)),
+    ],
+)
+def test_clip_bounds_require_valid_durations(
+    tmp_path: Path, audio: Path, begin: timedelta, end: timedelta
+) -> None:
+    source = tmp_path / "source.epub"
+    _source(source)
+    timing = Timing("two.xhtml#first", "audio/tone.opus", begin, end)
+    with pytest.raises(ValueError, match="invalid clip times"):
+        publish_media_overlays(
+            source, tmp_path / "output.epub", [timing], {"audio/tone.opus": audio}
+        )
+
+
+def test_publisher_rejects_ambiguous_fragment_ids(tmp_path: Path, audio: Path) -> None:
+    source = tmp_path / "source.epub"
+    files = _source(source)
+    files["OEBPS/two.xhtml"] = files["OEBPS/two.xhtml"].replace(
+        b'id="second"', b'id="first"'
+    )
+    with ZipFile(source, "w") as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    with pytest.raises(ValueError, match="duplicate XHTML IDs"):
+        publish_media_overlays(
+            source, tmp_path / "output.epub", _timings(), {"audio/tone.opus": audio}
         )
