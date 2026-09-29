@@ -76,6 +76,19 @@ Agent packages declared in `apm.yml` are installed with [APM](https://microsoft.
 apm install
 ```
 
+## audio.cpp
+
+The Compose provider is managed with mise. Podman and NVIDIA CDI remain host prerequisites.
+
+```shell
+mkdir -p data/models
+podman compose --profile tools run --rm model-manager list --remote
+podman compose --profile tools run --rm model-manager install <package-id> --models-dir /app/models
+podman compose up --build audiocpp
+```
+
+The WebUI is available at `http://127.0.0.1:8080`.
+
 ## Validator Images
 
 ```sh

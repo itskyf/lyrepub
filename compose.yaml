@@ -29,8 +29,8 @@ services:
 
     healthcheck:
       test: [CMD, curl, --fail, --silent, --show-error, --output, /dev/null, http://127.0.0.1:8080/health]
-      start_period: 60s # Do not count startup probe failures for the first 60s.
-      start_interval: 1s # Probe every second during that startup grace period.
+      start_period: 60s # audio.cpp's readiness helper allows up to 60s for startup.
+      start_interval: 1s # audio.cpp's readiness helper polls once per second.
 
   model-manager:
     build:
