@@ -28,7 +28,7 @@ services:
           create_host_path: false
           selinux: z
 
-    command: [server, --ui, --host, 0.0.0.0, --port, "8080", --backend, cuda]
+    command: [server, --config, /app/server.json, --host, 0.0.0.0, --backend, cuda]
 
     healthcheck:
       test: [CMD, curl, --fail, --silent, --show-error, --output, /dev/null, http://127.0.0.1:8080/health]

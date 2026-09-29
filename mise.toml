@@ -1,4 +1,5 @@
 [tools]
+biome = "latest"
 docker-compose = "latest"
 "github:immanuwell/dockerfile-roast" = "latest"
 hk = "latest"
