@@ -1,9 +1,19 @@
-"""Generate Issue #14 TTS listening evidence with sentence synthesis timing.
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.13,<3.14"
+# dependencies = [
+#   "defusedxml>=0.7.1,<0.8", "fast-ebook>=0.2.0,<0.3", "numpy", "soundfile",
+#   "vieneu==3.8.3", "sea-g2p==0.10.0", "wtpsplit==2.2.2",
+#   "transformers[torch]==5.17.0", "zapros[pyreqwest]==0.19.0",
+# ]
+# ///
+"""Exercise the retained TTS benchmark through the Compose server.
 
 Source and model locations are runtime inputs. Outputs live in gitignored data/.
 """
 
 import argparse
+import asyncio
 import hashlib
 import importlib
 import json
@@ -122,7 +132,6 @@ def prepare(output: Path, source: Path) -> None:
         records.append(
             {
                 "key": key(spine_index, block_index),
-                "case": (spine_index, block_index) in CASES,
                 "source": {
                     "isbn": ISBN,
                     "spine_index": spine_index,
@@ -174,30 +183,117 @@ def ogg_duration(path: Path) -> Decimal:
     return duration
 
 
+def compare(output: Path, frozen: Path) -> None:
+    """Compare frozen sentence inputs, timings and decoded Opus audio."""
+    records = {record["key"]: record for record in load_records(output)}
+    comparisons = []
+    for baseline in load_records(frozen):
+        record = records[baseline["key"]]
+        for old, new in zip(baseline["sentences"], record["sentences"], strict=True):
+            fields = (
+                "source_start",
+                "source_end",
+                "source_text",
+                "tts_input",
+                "gaps",
+                "clip_begin",
+                "clip_end",
+            )
+            differences = [field for field in fields if old[field] != new[field]]
+            old_chunks = [(c["normalized_text"], c["phonemes"]) for c in old["chunks"]]
+            new_chunks = [(c["normalized_text"], c["phonemes"]) for c in new["chunks"]]
+            if old_chunks != new_chunks:
+                differences.append("frontend_chunks")
+            hashes = []
+            for directory, sentence in ((frozen, old), (output, new)):
+                with tempfile.NamedTemporaryFile(suffix=".pcm") as pcm:
+                    run_tool(
+                        [
+                            "ffmpeg",
+                            "-v",
+                            "error",
+                            "-y",
+                            "-i",
+                            str(directory / sentence["packaged_audio"]),
+                            "-f",
+                            "f32le",
+                            pcm.name,
+                        ]
+                    )
+                    hashes.append(
+                        hashlib.sha256(Path(pcm.name).read_bytes()).hexdigest()
+                    )
+            comparisons.append(
+                {
+                    "key": record["key"],
+                    "sentence": new["index"],
+                    "differences": differences,
+                    "frozen_pcm_sha256": hashes[0],
+                    "server_pcm_sha256": hashes[1],
+                    "identical_pcm": hashes[0] == hashes[1],
+                }
+            )
+    (output / "benchmark-comparison.json").write_text(
+        json.dumps(comparisons, indent=2) + "\n"
+    )
+    LOGGER.warning(
+        "%s sentences; %s field mismatches; %s PCM differences",
+        len(comparisons),
+        sum(bool(c["differences"]) for c in comparisons),
+        sum(not c["identical_pcm"] for c in comparisons),
+    )
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("step", choices=("prepare", "synthesize"))
+    parser.add_argument("step", choices=("prepare", "synthesize", "compare"))
     parser.add_argument(
-        "--output", type=Path, default=Path("data/issue-14-feasibility")
+        "--output", type=Path, default=Path("data/publications/tts-benchmark")
     )
     parser.add_argument("--source-epub", type=Path)
+    parser.add_argument("--frozen", type=Path, default=Path("data/silver/issue-14"))
     parser.add_argument("--model", type=Path)
     parser.add_argument("--voice-dir", type=Path)
-    parser.add_argument("--image")
+    parser.add_argument("--concurrency", type=int, default=1)
     args = parser.parse_args()
+    if args.step == "compare":
+        compare(args.output, args.frozen)
+        return
     if args.step == "prepare" and args.source_epub is None:
         parser.error("--source-epub is required")
     if args.step == "prepare":
         prepare(args.output, args.source_epub)
     elif args.step == "synthesize":
-        if any(v is None for v in (args.model, args.voice_dir, args.image)):
-            parser.error("synthesize requires --model, --voice-dir, --image")
-        synthesis = importlib.import_module("scripts.issue14_synthesis")
-        synthesis.synthesize(
-            args.output,
-            args.model,
-            args.voice_dir,
-            args.image,
+        if args.model is None or args.voice_dir is None or args.concurrency <= 0:
+            parser.error(
+                "synthesize requires --model, --voice-dir and positive --concurrency"
+            )
+        synthesis = importlib.import_module("scripts.tts_synthesis")
+        records = load_records(args.output)
+        segmentation = importlib.import_module("lyrepub.segmentation")
+        for record in records:
+            source = record["source"]["text"]
+            record["sentences"] = synthesis.prepare_sentences(
+                source,
+                normalize_slash_enumeration(source),
+                segmentation.segment_sentences(source),
+                record.get("manual_normalization"),
+            )
+            record["seed"] = (
+                14
+                + record["source"]["spine_index"] * 1000
+                + record["source"]["block_index"]
+            )
+            record["status"] = "preprocessed"
+        save_records(args.output, records)
+        asyncio.run(
+            synthesis.synthesize_records(
+                args.output,
+                (args.model.resolve(), args.voice_dir.resolve()),
+                records,
+                args.concurrency,
+                filename="cases.json",
+            )
         )
 
 

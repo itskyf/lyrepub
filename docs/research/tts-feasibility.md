@@ -104,13 +104,9 @@ The reported `data/silver/issue-14-reported/cases.json` provides the sentence ti
 
 ## Reproduction and retained evidence
 
-Set `SOURCE_EPUB`, `MODEL_GGUF`, `VOICE_DIR`, and `AUDIOCPP_IMAGE` to the reviewed inputs and reproduce into a fresh output directory:
-
-```sh
-OUT=data/issue-14-reported-reproduction
-pixi run -e dev python -m scripts.issue14_feasibility prepare --output "$OUT" --source-epub "$SOURCE_EPUB"
-pixi run -e dev python -m scripts.issue14_feasibility synthesize --output "$OUT" --model "$MODEL_GGUF" --voice-dir "$VOICE_DIR" --image "$AUDIOCPP_IMAGE"
-```
+The recorded results below remain evidence of the original pinned CLI runtime, not of the current Compose server.
+The semantic `scripts/tts_benchmark.py` now exercises the retained benchmark through Compose using its PEP 723 environment.
+See [publication validation](publication-validation.md) for current commands and the explicit comparison with the frozen outputs.
 
 The retained `data/silver/issue-14/` feasibility handoff contains the JSON records needed to reproduce and inspect the frozen run, the selected Opus outputs, the raw s17 failure, `number-boundary-diagnostic.json`, and the paragraph diagnostic EPUB used for the granularity decision.
 The reported evaluation is retained in `data/silver/issue-14-reported/` as machine-readable records plus the sentence and full-case Opus outputs.

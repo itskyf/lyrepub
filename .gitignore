@@ -230,3 +230,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local browser validation snapshots and sessions
+.playwright-cli/

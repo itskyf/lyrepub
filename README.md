@@ -91,6 +91,7 @@ podman compose up audiocpp
 ```
 
 The WebUI is available at `http://127.0.0.1:8080`.
+The server configuration in `containers/audiocpp.json` loads the publication checkpoint and Quỳnh Anh assets from `data/models/VieNeu-TTS-v3-Turbo-GGUF/`.
 
 ### Validators
 
@@ -99,6 +100,18 @@ EPUBCheck and Ace are available as Compose tools:
 ```shell
 podman compose build epubcheck ace
 ```
+
+### Browser validation
+
+The Compose Playwright service provides Chromium for the mise-managed `playwright-cli` without installing a browser on the host:
+
+```shell
+podman compose up --detach playwright
+```
+
+Use the CLI's remote configuration with `browser.isolated` set to `true` and `browser.remoteEndpoint` set to `ws://127.0.0.1:3000/?browser=chromium`.
+The pinned CLI uses the compatible Playwright 1.63 client; the service runs Playwright 1.63.0.
+See [publication validation](docs/research/publication-validation.md) for the import and playback workflow.
 
 ## Repository Map
 

@@ -1,52 +1,81 @@
+#!/usr/bin/env -S uv run --script
+# /// script
+# requires-python = ">=3.13,<3.14"
+# dependencies = [
+#   "defusedxml>=0.7.1,<0.8", "fast-ebook>=0.2.0,<0.3", "numpy", "soundfile",
+#   "vieneu==3.8.3", "sea-g2p==0.10.0", "wtpsplit==2.2.2",
+#   "transformers[torch]==5.17.0", "zapros[pyreqwest]==0.19.0",
+# ]
+# ///
 """Build the full TTS publication using the existing frozen sentence path."""
 
 import argparse
+import asyncio
 import json
 import logging
 import posixpath
-import tempfile
 from collections import defaultdict
 from dataclasses import asdict
 from datetime import timedelta
 from decimal import Decimal
 from pathlib import Path
+from xml.etree.ElementTree import tostring
 from zipfile import ZipFile
 
-import soundfile as sf
-from vieneu_utils.core_utils import gaps_to_silence, join_audio_chunks
+from defusedxml import ElementTree as ET
 
 from lyrepub.epub_text import extract_blocks, materialize_sentence_targets
 from lyrepub.media_overlays import Timing, publish_media_overlays
 from lyrepub.segmentation import segment_sentences
-from scripts.issue14_feasibility import (
+from scripts.publication import correct_tts_source, publication_metadata, repair
+from scripts.tts_benchmark import (
     MANUAL_NORMALIZATIONS,
     key,
-    load_records,
     normalize_slash_enumeration,
     ogg_duration,
-    run_tool,
-    save_records,
 )
-from scripts.issue14_synthesis import (
-    audio_cpp_command,
-    inspect_image,
-    package_audio,
+from scripts.tts_synthesis import (
     prepare_sentences,
-    runtime_settings,
     sha256,
-    validate_inputs,
+    synthesize_records,
 )
-from scripts.issue17_publication import repair
 
 LOGGER = logging.getLogger(__name__)
 
 
+def load_records(output: Path) -> list[dict]:
+    return json.loads((output / "sentences.json").read_text())
+
+
+def save_records(output: Path, records: list[dict]) -> None:
+    (output / "sentences.json").write_text(
+        json.dumps(records, ensure_ascii=False, indent=2) + "\n"
+    )
+
+
 def prepare(source: Path, output: Path) -> None:
     """Prepare all readable source blocks without storing duplicate block text."""
-    if (output / "cases.json").exists():
-        raise FileExistsError(output / "cases.json")
+    if (output / "sentences.json").exists():
+        raise FileExistsError(output / "sentences.json")
+    output.mkdir(parents=True, exist_ok=True)
+    corrected = output / "corrected-source.epub"
+    correct_tts_source(source, corrected)
     records = []
-    for block in extract_blocks(source):
+    bronze_blocks = [
+        block
+        for block in extract_blocks(source)
+        if (block.href, block.text)
+        not in {("Text/1.html", "V"), ("Text/12.html", '"P')}
+    ]
+    for original, block in zip(bronze_blocks, extract_blocks(corrected), strict=True):
+        expected_text = (
+            original.text.replace('"P hú', '"Phú', 1)
+            if original.href == "Text/12.html"
+            else original.text
+        )
+        if original.href != block.href or expected_text != block.text:
+            message = "final source differs beyond reviewed corrections"
+            raise ValueError(message)
         location = asdict(block)
         location.pop("text")
         manual = MANUAL_NORMALIZATIONS.get((block.spine_index, block.block_index))
@@ -89,7 +118,8 @@ def prepare(source: Path, output: Path) -> None:
         record = {
             "key": key(block.spine_index, block.block_index),
             "source": location,
-            "seed": 14 + block.spine_index * 1000 + block.block_index,
+            "bronze_block_index": original.block_index,
+            "seed": 14 + original.spine_index * 1000 + original.block_index,
             "sentences": sentences,
             "status": "preprocessed",
             "interventions": [],
@@ -113,126 +143,49 @@ def prepare(source: Path, output: Path) -> None:
                 block.text, block.text, [s["source_text"] for s in sentences]
             )
         records.append(record)
-    output.mkdir(parents=True, exist_ok=True)
     save_records(output, records)
     (output / "source.json").write_text(
-        json.dumps({"filename": source.name, "sha256": sha256(source)}, indent=2) + "\n"
+        json.dumps(
+            {
+                "filename": source.name,
+                "sha256": sha256(source),
+                "corrected_sha256": sha256(corrected),
+            },
+            indent=2,
+        )
+        + "\n"
     )
 
 
-def synthesize(output: Path, model: Path, voice: Path, image: str) -> None:
-    """Resume completed blocks, retaining failures and stopping immediately."""
-    output, model, voice = output.resolve(), model.resolve(), voice.resolve()
-    settings = runtime_settings(
-        model, validate_inputs(model, voice), inspect_image(image)
-    )
-    settings["purpose"] = "Issue #17 full publication"
-    settings.pop("sentence_join")
-    settings["execution"] = (
-        "native CLI request-sequence, grouped by source spine; seed reset per chunk"
-    )
-    runtime = output / "runtime.json"
-    if runtime.exists() and json.loads(runtime.read_text()) != settings:
-        msg = "runtime differs from existing publication synthesis"
-        raise ValueError(msg)
-    runtime.write_text(json.dumps(settings, ensure_ascii=False, indent=2) + "\n")
-    (output / "audio").mkdir(exist_ok=True)
-    (output / "traces").mkdir(exist_ok=True)
+def synthesize(output: Path, model: Path, voice: Path, concurrency: int = 1) -> None:
+    """Resume completed blocks through the Compose audio.cpp server."""
     records = load_records(output)
-    failures = [r["key"] for r in records if r["status"] == "preprocessing_failure"]
-    if failures:
-        message = f"unresolved preprocessing failures: {failures}"
-        raise ValueError(message)
-    chapters = defaultdict(list)
-    for record in records:
-        if record["status"] != "ok":
-            chapters[record["source"]["spine_index"]].append(record)
-    for spine_index, chapter in chapters.items():
-        try:
-            _synthesize_chapter(output, (model, voice, image), chapter)
-        except (OSError, ValueError, RuntimeError) as exc:
-            for record in chapter:
-                record["status"] = "synthesis_failure"
-                record["error"] = f"{type(exc).__name__}: {exc}"
-            raise
-        finally:
-            save_records(output, records)
-        LOGGER.info("spine %s complete", spine_index)
+    asyncio.run(
+        synthesize_records(
+            output,
+            (model.resolve(), voice.resolve()),
+            records,
+            concurrency,
+            filename="sentences.json",
+        )
+    )
 
 
-def _synthesize_chapter(
-    output: Path, assets: tuple[Path, Path, str], records: list[dict]
-) -> None:
-    model, voice, image = assets
-    requests = []
-    for record in records:
-        for sentence in record["sentences"]:
-            for index, chunk in enumerate(sentence["chunks"]):
-                phonemes = chunk["phonemes"]
-                if not phonemes.strip() or "\n" in phonemes:
-                    message = "prepared request must contain one phoneme paragraph"
-                    raise ValueError(message)
-                chunk["key"] = f"{record['key']}-s{sentence['index']:03d}-c{index:02d}"
-                chunk["seed"] = record["seed"]
-                chunk["text_chunk_size_bytes"] = len(phonemes.encode("utf-8"))
-                chunk["audio"] = f"audio/{chunk['key']}.wav"
-                requests.append(
-                    {
-                        "id": chunk["key"],
-                        "text": phonemes,
-                        "seed": chunk["seed"],
-                        "options": {
-                            "text_chunk_size": str(chunk["text_chunk_size_bytes"]),
-                            "reference_codes_file": "/inputs/voice/ref_codes.txt",
-                            "speaker_embedding_file": "/inputs/voice/speaker.emb.txt",
-                        },
-                    }
-                )
-    with tempfile.NamedTemporaryFile(
-        mode="w", suffix=".json", dir=output / "traces"
-    ) as sequence:
-        json.dump(requests, sequence, ensure_ascii=False)
-        sequence.flush()
-        command = [
-            *audio_cpp_command(output, model, voice, image),
-            "--request-sequence",
-            f"/output/traces/{Path(sequence.name).name}",
-            "--out-dir",
-            "/output/audio",
-            "--batch-manifest-out",
-            f"/output/traces/spine-{records[0]['source']['spine_index']}.json",
-        ]
-        stdout, stderr = run_tool(command)
-        (
-            output / "traces" / f"spine-{records[0]['source']['spine_index']}.log"
-        ).write_text(stdout + stderr)
-    for record in records:
-        for sentence in record["sentences"]:
-            parts, rate = [], None
-            for chunk in sentence["chunks"]:
-                pcm, current_rate = sf.read(
-                    output / chunk["audio"], dtype="float32", always_2d=True
-                )
-                if rate is not None and current_rate != rate:
-                    message = "inconsistent PCM sample rates"
-                    raise ValueError(message)
-                rate = current_rate
-                parts.append(pcm.mean(axis=1))
-            pcm = join_audio_chunks(
-                parts, rate, silence_ps=gaps_to_silence(sentence["gaps"])
-            )
-            name = f"case={record['key']},sentence={sentence['index']:03d}"
-            sentence.update(package_audio(output, name, pcm, rate))
-        record["status"] = "ok"
-        record.pop("error", None)
-
-
-def publish(source: Path, output: Path) -> None:
-    """Materialize original source ranges and publish measured sentence audio."""
+def _prepared_source(source: Path, output: Path) -> Path:
     provenance = json.loads((output / "source.json").read_text())
     if sha256(source) != provenance["sha256"]:
         msg = "source EPUB differs from prepared source"
         raise ValueError(msg)
+    source = output / "corrected-source.epub"
+    if sha256(source) != provenance["corrected_sha256"]:
+        message = "corrected source EPUB differs from prepared source"
+        raise ValueError(message)
+    return source
+
+
+def publish(source: Path, output: Path) -> None:
+    """Materialize original source ranges and publish measured sentence audio."""
+    source = _prepared_source(source, output)
     blocks = {(b.spine_index, b.block_index): b for b in extract_blocks(source)}
     records = load_records(output)
     identities = [
@@ -247,8 +200,9 @@ def publish(source: Path, output: Path) -> None:
             msg = f"incomplete synthesis: {record['key']}"
             raise ValueError(msg)
         block = blocks[identity]
-        location = asdict(block)
-        location.pop("text")
+        location = {
+            name: value for name, value in asdict(block).items() if name != "text"
+        }
         location["element_path"] = list(location["element_path"])
         if location != record["source"]:
             msg = "source location drift"
@@ -265,16 +219,27 @@ def publish(source: Path, output: Path) -> None:
             msg = "incomplete sentence coverage"
             raise ValueError(msg)
     edits, timings, audio = {}, [], {}
+    work = output / "work"
+    work.mkdir(exist_ok=True)
     with ZipFile(source) as archive:
         opf = next(name for name in archive.namelist() if name.endswith(".opf"))
+        package = ET.fromstring(archive.read(opf))
+        publication_metadata(package, "tts")
+        edits[opf] = tostring(package, encoding="utf-8", xml_declaration=True)
         for href, rows in documents.items():
             path = posixpath.join(posixpath.dirname(opf), href)
-            targets = [
-                (b, s["index"], s["source_start"], s["source_end"], s["source_text"])
-                for b, s in rows
-            ]
             edits[path], hrefs = materialize_sentence_targets(
-                archive.read(path), targets
+                archive.read(path),
+                [
+                    (
+                        b,
+                        s["index"],
+                        s["source_start"],
+                        s["source_end"],
+                        s["source_text"],
+                    )
+                    for b, s in rows
+                ],
             )
             for target, (_, sentence) in zip(hrefs, rows, strict=True):
                 audio_path = output / sentence["packaged_audio"]
@@ -299,16 +264,15 @@ def publish(source: Path, output: Path) -> None:
                         ),
                     )
                 )
-        targeted = output / "targeted.epub"
+        targeted = work / "targeted.epub"
         with ZipFile(targeted, "w") as result:
             for info in archive.infolist():
                 result.writestr(
                     info, edits.get(info.filename, archive.read(info.filename))
                 )
-    # Repair after targeting so source locations always describe the original EPUB.
-    staged = output / "publication-source.epub"
-    repair(targeted, staged, "tts")
-    publish_media_overlays(staged, output / "final.epub", timings, audio)
+    overlaid = work / "overlaid.epub"
+    publish_media_overlays(targeted, overlaid, timings, audio)
+    repair(overlaid, output / "final.epub", "tts")
 
 
 def main() -> None:
@@ -318,13 +282,15 @@ def main() -> None:
     parser.add_argument("--source", type=Path)
     parser.add_argument("--model", type=Path)
     parser.add_argument("--voice", type=Path)
-    parser.add_argument("--image", default="localhost/audio.cpp:full-cuda13")
+    parser.add_argument("--concurrency", type=int, default=1)
     args = parser.parse_args()
+    if args.concurrency <= 0:
+        parser.error("--concurrency must be positive")
     logging.basicConfig(level=logging.INFO)
     if args.step == "synthesize":
         if not args.model or not args.voice:
             parser.error("synthesize requires --model and --voice")
-        synthesize(args.output, args.model, args.voice, args.image)
+        synthesize(args.output, args.model, args.voice, args.concurrency)
     else:
         if not args.source:
             parser.error("prepare/publish require --source")
