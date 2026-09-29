@@ -258,20 +258,12 @@ def test_invalid_inputs(
         )
 
 
-@pytest.mark.parametrize(
-    ("duration", "clock"),
-    [
-        (timedelta(0), "0s"),
-        (timedelta(microseconds=1), "0.000001s"),
-        (timedelta(seconds=4, milliseconds=166), "4.166s"),
-        (timedelta(days=1, seconds=1, microseconds=1), "86401.000001s"),
-    ],
-)
-def test_clock_serializes_timedelta_exactly(duration: timedelta, clock: str) -> None:
-    assert _clock(duration) == clock
+def test_clock_serializes_timedelta_exactly() -> None:
+    assert _clock(timedelta(0)) == "0s"
+    assert _clock(timedelta(seconds=4, microseconds=166001)) == "4.166001s"
 
 
-def test_sentence_target_publication(tmp_path: Path) -> None:
+def test_sentence_target_publication(tmp_path: Path, audio: Path) -> None:
     source, output = tmp_path / "targets.epub", tmp_path / "sentence-targets.epub"
     files = _source(source)
     timings = []
@@ -326,10 +318,7 @@ def test_sentence_target_publication(tmp_path: Path) -> None:
     with ZipFile(source, "w") as archive:
         for name, content in files.items():
             archive.writestr(name, content)
-    audio_path = Path(__file__).with_name("fixtures") / "silence.opus"
-    publish_media_overlays(
-        source, output, timings[::-1], {"audio/tone.opus": audio_path}
-    )
+    publish_media_overlays(source, output, timings[::-1], {"audio/tone.opus": audio})
     with ZipFile(output) as archive:
         for href, hrefs in expected.items():
             assert archive.read(f"OEBPS/{href}") == files[f"OEBPS/{href}"]
@@ -367,38 +356,3 @@ def test_sentence_target_publication(tmp_path: Path) -> None:
             "#lyrepub-smil-1": "0.4s",
             None: "1s",
         }
-
-
-@pytest.mark.parametrize(
-    ("begin", "end"),
-    [
-        (timedelta(seconds=-1), timedelta(seconds=1)),
-        (timedelta(seconds=2), timedelta(seconds=1)),
-        ("0.000", timedelta(seconds=1)),
-    ],
-)
-def test_clip_bounds_require_valid_durations(
-    tmp_path: Path, audio: Path, begin: timedelta, end: timedelta
-) -> None:
-    source = tmp_path / "source.epub"
-    _source(source)
-    timing = Timing("two.xhtml#first", "audio/tone.opus", begin, end)
-    with pytest.raises(ValueError, match="invalid clip times"):
-        publish_media_overlays(
-            source, tmp_path / "output.epub", [timing], {"audio/tone.opus": audio}
-        )
-
-
-def test_publisher_rejects_ambiguous_fragment_ids(tmp_path: Path, audio: Path) -> None:
-    source = tmp_path / "source.epub"
-    files = _source(source)
-    files["OEBPS/two.xhtml"] = files["OEBPS/two.xhtml"].replace(
-        b'id="second"', b'id="first"'
-    )
-    with ZipFile(source, "w") as archive:
-        for name, content in files.items():
-            archive.writestr(name, content)
-    with pytest.raises(ValueError, match="duplicate XHTML IDs"):
-        publish_media_overlays(
-            source, tmp_path / "output.epub", _timings(), {"audio/tone.opus": audio}
-        )

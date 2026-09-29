@@ -81,12 +81,6 @@ def _spine_items(book: epub.EpubBook) -> dict[str, tuple[int, str, dict[str, int
         if body is None:
             msg = f"XHTML has no body: {href!r}"
             raise ValueError(msg)
-        authored_ids = [
-            element.get("id") for element in root.iter() if element.get("id")
-        ]
-        if len(authored_ids) != len(set(authored_ids)):
-            msg = f"duplicate XHTML IDs in {href!r}"
-            raise ValueError(msg)
         ids = {
             element.get("id"): index
             for index, element in enumerate(body.iter())

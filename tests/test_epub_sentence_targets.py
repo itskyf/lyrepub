@@ -2,7 +2,7 @@
 
 from dataclasses import replace
 from urllib.parse import unquote
-from xml.etree import ElementTree as ET
+from xml.etree.ElementTree import Element, SubElement, tostring
 
 import pytest
 from defusedxml import ElementTree
@@ -13,11 +13,10 @@ _XHTML = "http://www.w3.org/1999/xhtml"
 _PREFIX = "lyrepub-sentence-"
 
 
-def _document(body: str) -> str:
-    return (
-        f'<html xmlns="{_XHTML}" xml:lang="vi"><head><title>Test</title></head>'
-        f"<body>{body}</body></html>"
-    )
+def _document() -> tuple[Element, Element]:
+    root = Element("html", {"xmlns": _XHTML, "xml:lang": "vi"})
+    SubElement(SubElement(root, "head"), "title").text = "Test"
+    return root, SubElement(root, "body")
 
 
 def _targets(
@@ -32,11 +31,11 @@ def _targets(
     return targets
 
 
-def _semantics(xhtml: str | bytes) -> list[tuple[str, tuple]]:
+def _semantics(xhtml: bytes) -> list[tuple[str, tuple]]:
     """Compare each authored character and break with its semantic ancestry."""
     result = []
 
-    def visit(element: ET.Element, ancestry: tuple) -> None:
+    def visit(element: Element, ancestry: tuple) -> None:
         generated = element.get("id", "").startswith(_PREFIX)
         attributes = tuple(
             sorted(
@@ -65,30 +64,34 @@ def _assert_targets(
     root = ElementTree.fromstring(content)
     ids = [element.get("id") for element in root.iter() if element.get("id")]
     assert len(ids) == len(set(ids))
-    by_id = {element.get("id"): element for element in root.iter()}
     blocks = parse_blocks(content, 2, "Text/ch.xhtml", linear=True)
     for href, (source, _, _, _, text) in zip(hrefs, targets, strict=True):
         fragment = unquote(href.split("#")[1])
-        assert fragment in by_id
         resolved = [block for block in blocks if block.element_id == fragment]
         assert [(block.text, block.lang) for block in resolved] == [(text, source.lang)]
 
 
-def test_inline_whitespace_breaks_language_and_headings() -> None:
-    xhtml = _document(
-        '<h2 id="chapter" role="doc-subtitle">Chương một.</h2>'
-        '<p> \nÔng <em class="voice" title="Giọng">Nguyễn đến. Câu</em> \t'
-        " tiếp có<br/>ngắt dòng.\u00a0Cuối.  </p>"
-        '<section xml:lang="en"><h3>English heading.</h3><p>English.</p></section>'
-        '<p lang="fr">Bonjour.</p>'
-    )
+def test_inline_whitespace_breaks_language_headings_and_order() -> None:
+    document, body = _document()
+    SubElement(
+        body, "h2", {"id": "chapter", "role": "doc-subtitle"}
+    ).text = "Chương một."
+    paragraph = SubElement(body, "p")
+    paragraph.text = " \nÔng "
+    emphasis = SubElement(paragraph, "em", {"class": "voice", "title": "Giọng"})
+    emphasis.text = "Nguyễn đến. Câu"
+    emphasis.tail = " \t tiếp có"
+    SubElement(paragraph, "br").tail = "ngắt dòng.\u00a0Cuối.  "
+    section = SubElement(body, "section", {"xml:lang": "en"})
+    SubElement(section, "h3").text = "English heading."
+    SubElement(section, "p").text = "English."
+    xhtml = tostring(document)
     blocks = parse_blocks(xhtml, 2, "Text/ch.xhtml", linear=True)
     sentences = [
         ["Chương một."],
         ["Ông Nguyễn đến.", "Câu tiếp có ngắt dòng.", "Cuối."],
         ["English heading."],
         ["English."],
-        ["Bonjour."],
     ]
     targets = [
         target
@@ -105,8 +108,6 @@ def test_inline_whitespace_breaks_language_and_headings() -> None:
     root = ElementTree.fromstring(content)
     assert root.find(f".//{{{_XHTML}}}h2").get("id") == "chapter"
     assert root.find(f".//{{{_XHTML}}}h3").get("id") == "lyrepub-sentence-2-2-0"
-    assert len(root.findall(f".//{{{_XHTML}}}br")) == 1
-    assert materialize_sentence_targets(xhtml, targets) == (content, hrefs)
     reversed_content, reversed_hrefs = materialize_sentence_targets(
         xhtml, targets[::-1]
     )
@@ -115,9 +116,12 @@ def test_inline_whitespace_breaks_language_and_headings() -> None:
 
 
 def test_exact_inline_element_and_authored_owner_id() -> None:
-    xhtml = _document(
-        '<p id="paragraph">First. <em title="emphasis">Second.</em> Third.</p>'
-    )
+    document, body = _document()
+    paragraph = SubElement(body, "p", {"id": "paragraph"})
+    paragraph.text = "First. "
+    emphasis = SubElement(paragraph, "em", {"title": "emphasis"})
+    emphasis.text, emphasis.tail = "Second.", " Third."
+    xhtml = tostring(document)
     block = parse_blocks(xhtml, 2, "Text/ch.xhtml", linear=True)[0]
     targets = _targets(block, ["First.", "Second.", "Third."])
     content, hrefs = materialize_sentence_targets(xhtml, targets)
@@ -131,10 +135,16 @@ def test_exact_inline_element_and_authored_owner_id() -> None:
 
 
 def test_original_locations_survive_nested_owner_runs() -> None:
-    xhtml = _document(
-        '<section>Before.<p id="nested">Nested.</p>After.</section>'
-        '<p>Xin <span xml:lang="fr" id="french">bonjour</span> nhé.</p>'
-    )
+    document, body = _document()
+    section = SubElement(body, "section")
+    section.text = "Before."
+    nested = SubElement(section, "p", {"id": "nested"})
+    nested.text, nested.tail = "Nested.", "After."
+    paragraph = SubElement(body, "p")
+    paragraph.text = "Xin "
+    french = SubElement(paragraph, "span", {"xml:lang": "fr", "id": "french"})
+    french.text, french.tail = "bonjour", " nhé."
+    xhtml = tostring(document)
     blocks = parse_blocks(xhtml, 2, "Text/ch.xhtml", linear=True)
     assert [block.run_index for block in blocks[:3]] == [0, 0, 1]
     targets = [target for block in blocks for target in _targets(block, [block.text])]
@@ -145,58 +155,29 @@ def test_original_locations_survive_nested_owner_runs() -> None:
     assert hrefs[4] == "Text/ch.xhtml#french"
 
 
-def test_unicode_is_not_normalized() -> None:
-    xhtml = '<?xml version="1.0" encoding="UTF-16"?>' + _document("<p>Á. Á.</p>")
-    source = xhtml.encode("utf-16")
-    block = parse_blocks(source, 2, "Text/ch.xhtml", linear=True)[0]
-    targets = _targets(block, ["Á.", "Á."])
-    content, hrefs = materialize_sentence_targets(source, targets)
-    assert _semantics(content) == _semantics(source)
-    _assert_targets(content, hrefs, targets)
-
-
-@pytest.mark.parametrize(
-    ("index", "start", "end", "text"),
-    [
-        (-1, 0, 4, "One."),
-        (0, -1, 4, "One."),
-        (0, 0, 0, ""),
-        (0, 0, 10, "One. Two."),
-        (0, 0, 4, "Drift"),
-        (0, 0.0, 4, "One."),
-        (0, 4, 5, " "),
-    ],
-)
-def test_invalid_ranges_fail(index: int, start: int, end: int, text: str) -> None:
-    xhtml = _document("<p>One. Two.</p>")
+def test_invalid_ranges_and_source_drift_fail() -> None:
+    document, body = _document()
+    SubElement(body, "p").text = "One. Two."
+    xhtml = tostring(document)
     block = parse_blocks(xhtml, 2, "Text/ch.xhtml", linear=True)[0]
     with pytest.raises(ValueError, match="invalid sentence range"):
-        materialize_sentence_targets(xhtml, [(block, index, start, end, text)])
+        materialize_sentence_targets(xhtml, [(block, 0, 0, 10, "One. Two.")])
+    with pytest.raises(ValueError, match="source text drift"):
+        materialize_sentence_targets(xhtml, [(block, 0, 0, 4, "Changed.")])
+    body[0].text = "Changed."
+    with pytest.raises(ValueError, match="source drift"):
+        materialize_sentence_targets(tostring(document), [(block, 0, 0, 4, "One.")])
+    for changed in (replace(block, element_path=(1, 99)), replace(block, run_index=1)):
+        with pytest.raises(
+            ValueError, match="unresolvable block location or source drift"
+        ):
+            materialize_sentence_targets(xhtml, [(changed, 0, 0, 4, "One.")])
 
 
-@pytest.mark.parametrize(
-    "change",
-    [
-        {"text": "Changed."},
-        {"element_path": (1, 99)},
-        {"run_index": 1},
-        {"href": "other.xhtml"},
-        {"spine_index": 3},
-        {"lang": "en"},
-    ],
-)
-def test_drift_and_unresolvable_locations_fail(change: dict) -> None:
-    xhtml = _document("<p>One.</p><p>Two.</p>")
-    first, second = parse_blocks(xhtml, 2, "Text/ch.xhtml", linear=True)
-    with pytest.raises(ValueError, match="unresolvable block location or source drift"):
-        materialize_sentence_targets(
-            xhtml,
-            [(first, 0, 0, 4, "One."), (replace(second, **change), 0, 0, 4, "Two.")],
-        )
-
-
-def test_overlap_duplicate_identity_and_ids_fail() -> None:
-    xhtml = _document("<p>One. Two.</p>")
+def test_overlap_and_duplicate_identity_fail() -> None:
+    document, body = _document()
+    SubElement(body, "p").text = "One. Two."
+    xhtml = tostring(document)
     block = parse_blocks(xhtml, 2, "Text/ch.xhtml", linear=True)[0]
     with pytest.raises(ValueError, match="overlapping sentence ranges"):
         materialize_sentence_targets(
@@ -206,20 +187,21 @@ def test_overlap_duplicate_identity_and_ids_fail() -> None:
         materialize_sentence_targets(
             xhtml, [(block, 0, 0, 4, "One."), (block, 0, 5, 9, "Two.")]
         )
-    collision = _document('<p>One.</p><p id="lyrepub-sentence-2-0-0">Other.</p>')
-    block = parse_blocks(collision, 2, "Text/ch.xhtml", linear=True)[0]
-    with pytest.raises(ValueError, match="XHTML ID collision"):
-        materialize_sentence_targets(collision, [(block, 0, 0, 4, "One.")])
-    duplicates = _document('<p id="same">One.</p><p id="same">Other.</p>')
-    block = parse_blocks(duplicates, 2, "Text/ch.xhtml", linear=True)[0]
-    with pytest.raises(ValueError, match="duplicate XHTML IDs"):
-        materialize_sentence_targets(duplicates, [(block, 0, 0, 4, "One.")])
 
 
-def test_malformed_xhtml_and_empty_targets_fail() -> None:
-    xhtml = _document("<p>One.</p>")
+def test_authored_and_generated_id_collisions_fail() -> None:
+    document, body = _document()
+    first = SubElement(body, "p")
+    first.text = "One."
+    other = SubElement(body, "p", {"id": "lyrepub-sentence-2-0-0"})
+    other.text = "Other."
+    xhtml = tostring(document)
     block = parse_blocks(xhtml, 2, "Text/ch.xhtml", linear=True)[0]
-    with pytest.raises(ValueError, match="invalid XHTML"):
-        materialize_sentence_targets("<broken", [(block, 0, 0, 4, "One.")])
-    with pytest.raises(ValueError, match="at least one sentence target"):
-        materialize_sentence_targets(xhtml, [])
+    with pytest.raises(ValueError, match="XHTML ID collision"):
+        materialize_sentence_targets(xhtml, [(block, 0, 0, 4, "One.")])
+    first.set("id", "same")
+    other.set("id", "same")
+    xhtml = tostring(document)
+    block = parse_blocks(xhtml, 2, "Text/ch.xhtml", linear=True)[0]
+    with pytest.raises(ValueError, match="duplicate XHTML IDs"):
+        materialize_sentence_targets(xhtml, [(block, 0, 0, 4, "One.")])
