@@ -1,6 +1,7 @@
 [tools]
 biome = "latest"
 docker-compose = "latest"
+"github:daisy/pipeline-cli-go" = "2.4.0"
 "github:immanuwell/dockerfile-roast" = "latest"
 hk = "latest"
 lychee = "latest"

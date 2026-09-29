@@ -70,3 +70,24 @@ services:
 
     profiles:
       - tools
+
+  daisy-pipeline:
+    image: docker.io/daisyorg/pipeline:1.15.5
+
+    profiles:
+      - tools
+
+    environment:
+      PIPELINE2_WS_HOST: 0.0.0.0
+      PIPELINE2_WS_AUTHENTICATION: "false"
+
+    ports:
+      - target: 8181
+        published: "8181"
+        host_ip: 127.0.0.1
+        protocol: tcp
+
+    healthcheck:
+      test: [CMD, bash, -c, "exec 3<>/dev/tcp/127.0.0.1/8181 && printf 'GET /ws/alive HTTP/1.1\\r\\nHost: 127.0.0.1\\r\\nConnection: close\\r\\n\\r\\n' >&3 && grep --quiet '200 OK' <&3"]
+      start_period: 90s # Pipeline's JVM/OSGi startup needs a grace period while frequent startup probes allow prompt readiness detection.
+      start_interval: 1s

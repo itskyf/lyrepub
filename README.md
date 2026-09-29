@@ -100,6 +100,16 @@ EPUBCheck and Ace are available as Compose tools:
 podman compose build epubcheck ace
 ```
 
+### DAISY Pipeline
+
+The DAISY Pipeline webservice runs as a Compose tool and its `dp2` CLI is installed through mise:
+
+```shell
+scripts/convert_daisy3.sh path/to/publication.epub
+```
+
+The script starts the webservice, waits for it to become healthy, converts the EPUB 3 publication to DAISY 3, and writes the submission ZIP with its SHA-256 hash into `data/daisy3/`.
+
 ## Repository Map
 
 - `docs/research/protocol.md`: Canonical research scope, questions, methodology, experiments, and evaluation
