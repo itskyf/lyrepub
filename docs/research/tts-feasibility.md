@@ -1,7 +1,7 @@
 # VieNeu-TTS feasibility review and frozen configuration
 
 Human feasibility review is complete, and the configuration below is frozen for the reported Issue #14 evaluation.
-No reported evaluation has run yet.
+The reported evaluation has run under this freeze; see [Reported evaluation](#reported-evaluation).
 The nine benchmark cases come from [source characterization](source-characterization.md), and the methodological freeze is recorded in the [protocol](protocol.md).
 
 ## Selected configuration
@@ -81,6 +81,22 @@ These are qualitative listening observations, not scores.
 
 All nine cases completed preprocessing, synthesis, and Opus packaging without runtime exceptions.
 
+## Reported evaluation
+
+The frozen configuration ran unchanged on the nine benchmark cases on 2026-09-28 into `data/silver/issue-14-reported/`.
+
+Measurements, recorded in the reported `cases.json` and `runtime.json` independently of listening:
+
+- 9/9 cases completed preprocessing, synthesis, and Opus packaging; no runtime or preprocessing failures.
+- 118 sentences across 121 synthesis chunks; all 118 sentence text/start/end triples are identical to the feasibility segmentation.
+- Total packaged narration 586.418 s; the longest sentence is 16.086 s (`s10-b42` sentence 023).
+- Exactly the two frozen interventions occurred: the `s2-b70` slash-list treatment and the `s17-b135` manual TTS-input correction; authored text and sentence offsets are unchanged.
+
+Qualitative result: the final human listening pass over the nine fresh full-case Opus outputs accepted all nine cases.
+No missing, repeated, or substituted content, no intelligibility, segmentation, pause, or long-form failure was observed, and no manual correction beyond the two recorded interventions was required.
+
+The `s17-b135` limitations are retained, not resolved: the raw SEA-G2P frontend failure on `S…át Th.. át!` (raw normalization `ét át th. át!`) and the unsupported stronger/extended shout.
+
 ## Synchronization handoff
 
 Human playback of the paragraph-level diagnostic found correct targeting and transitions but paragraph highlighting was too coarse for following and navigation.
@@ -89,16 +105,18 @@ Source blocks, internal TTS chunks, and publication synchronization targets rema
 Each sentence owns one final Opus file with a local timing interval from zero to its measured duration.
 Internal TTS chunk boundaries do not become Media Overlay targets.
 Issue #16 owns sentence-addressable XHTML targeting and consumes the frozen sentence identities, offsets, and Opus timings produced by Issue #14.
+The reported `data/silver/issue-14-reported/cases.json` is the final sentence/timing contract for Issue #16.
 
 ## Reproduction and retained evidence
 
 Set `SOURCE_EPUB`, `MODEL_GGUF`, `VOICE_DIR`, and `AUDIOCPP_IMAGE` to the reviewed inputs and reproduce into a fresh output directory:
 
 ```sh
-OUT=data/issue-14-final-frontend-reproduction
+OUT=data/issue-14-reported-reproduction
 pixi run -e dev python -m scripts.issue14_feasibility prepare --output "$OUT" --source-epub "$SOURCE_EPUB"
-pixi run -e dev python -m scripts.issue14_feasibility synthesize --output "$OUT" --model "$MODEL_GGUF" --voice-dir "$VOICE_DIR" --image "$AUDIOCPP_IMAGE"
+pixi run -e dev python -m scripts.issue14_feasibility synthesize --output "$OUT" --reported --model "$MODEL_GGUF" --voice-dir "$VOICE_DIR" --image "$AUDIOCPP_IMAGE"
 ```
 
-The retained `data/silver/issue-14/` handoff contains the JSON records needed to reproduce and inspect the frozen run, the selected Opus outputs, the raw s17 failure, `number-boundary-diagnostic.json`, and the paragraph diagnostic EPUB used for the granularity decision.
+The retained `data/silver/issue-14/` feasibility handoff contains the JSON records needed to reproduce and inspect the frozen run, the selected Opus outputs, the raw s17 failure, `number-boundary-diagnostic.json`, and the paragraph diagnostic EPUB used for the granularity decision.
+The reported evaluation is retained in `data/silver/issue-14-reported/`: `cases.json`, `runtime.json`, `source.json`, and the 127 final Opus files (nine full-case and 118 sentence outputs).
 Intermediate audio, models, voice assets, logs, and validator images are not duplicated into the silver handoff.

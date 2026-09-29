@@ -55,6 +55,8 @@ def synthesize(
     model: Path,
     voice_dir: Path,
     image: str,
+    *,
+    reported: bool = False,
 ) -> None:
     """Synthesize prepared cases with separate preprocessing and runtime evidence."""
     model = model.resolve()
@@ -64,7 +66,7 @@ def synthesize(
     required = validate_inputs(model, voice_dir)
     output.joinpath("audio").mkdir(parents=True, exist_ok=True)
     output.joinpath("traces").mkdir(exist_ok=True)
-    settings = runtime_settings(model, required, image_info)
+    settings = runtime_settings(model, required, image_info, reported=reported)
     output.joinpath("runtime.json").write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -242,9 +244,15 @@ def validate_inputs(model: Path, voice_dir: Path) -> list[Path]:
     return required
 
 
-def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
+def runtime_settings(
+    model: Path, required: list[Path], image: dict, *, reported: bool = False
+) -> dict:
     return {
-        "purpose": "frontend and synthesis-unit feasibility; not reported evaluation",
+        "purpose": (
+            "reported evaluation; frozen Issue #14 TTS configuration"
+            if reported
+            else "frontend and synthesis-unit feasibility; not reported evaluation"
+        ),
         "runtime": "audio.cpp",
         "image": image,
         "checkpoint": f"pnnbao-ump/VieNeu-TTS-v3-Turbo@{CHECKPOINT_REVISION}",

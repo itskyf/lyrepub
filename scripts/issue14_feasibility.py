@@ -184,6 +184,11 @@ def main() -> None:
     parser.add_argument("--model", type=Path)
     parser.add_argument("--voice-dir", type=Path)
     parser.add_argument("--image")
+    parser.add_argument(
+        "--reported",
+        action="store_true",
+        help="label the run as the reported evaluation in runtime.json",
+    )
     args = parser.parse_args()
     if args.step == "prepare" and args.source_epub is None:
         parser.error("--source-epub is required")
@@ -198,6 +203,7 @@ def main() -> None:
             args.model,
             args.voice_dir,
             args.image,
+            reported=args.reported,
         )
 
 
