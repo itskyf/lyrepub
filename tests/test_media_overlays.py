@@ -8,8 +8,8 @@ from zipfile import ZIP_STORED, ZipFile
 import pytest
 from defusedxml import ElementTree
 
-from lyrepub.epub_media_overlays import Timing, _clock, publish_media_overlays
 from lyrepub.epub_text import materialize_sentence_targets, parse_blocks
+from lyrepub.media_overlays import Timing, _clock, publish_media_overlays
 
 _OPF = "http://www.idpf.org/2007/opf"
 _SMIL = "http://www.w3.org/ns/SMIL"
