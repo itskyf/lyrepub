@@ -57,7 +57,7 @@ services:
 
   epubcheck:
     build:
-      context: https://github.com/w3c/epubcheck.git?tag=v5.4.0&checksum=a51f751b986ac424488586aae75c43d047bbdc53
+      context: https://github.com/w3c/epubcheck.git#a51f751b986ac424488586aae75c43d047bbdc53
       dockerfile: Dockerfile
 
     profiles:
