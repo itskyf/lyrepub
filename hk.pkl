@@ -13,6 +13,9 @@ steps {
   ["droast"] = Builtins.droast
   ["hclfmt"] = Builtins.hclfmt
 
+  // JavaScript/TypeScript
+  ["biome"] = Builtins.biome
+
   // Markdown
   ["rumdl"] = Builtins.rumdl
   ["rumdl-format"] = (Builtins.rumdl_format) {
