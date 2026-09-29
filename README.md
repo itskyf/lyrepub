@@ -90,14 +90,12 @@ podman compose up audiocpp
 
 The WebUI is available at `http://127.0.0.1:8080`.
 
-## Validator Images
+## Validators
 
-```sh
-mkdir --parents data/validator-images
-docker buildx create --name lyrepub-validators --driver docker-container
-docker buildx bake --builder lyrepub-validators --pull validators
-podman load --input data/validator-images/epubcheck-5.4.0.tar
-podman load --input data/validator-images/ace-1.4.6.tar
+EPUBCheck and Ace are available as Compose tools:
+
+```shell
+podman compose build epubcheck ace
 ```
 
 ## Repository Map

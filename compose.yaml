@@ -54,3 +54,19 @@ services:
           selinux: z
 
     entrypoint: [/app/entrypoint.sh, model-manager]
+
+  epubcheck:
+    build:
+      context: https://github.com/w3c/epubcheck.git?tag=v5.4.0&checksum=a51f751b986ac424488586aae75c43d047bbdc53
+      dockerfile: Dockerfile
+
+    profiles:
+      - tools
+
+  ace:
+    build:
+      context: containers
+      dockerfile: Containerfile.ace
+
+    profiles:
+      - tools
