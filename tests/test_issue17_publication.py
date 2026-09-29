@@ -74,6 +74,8 @@ def test_full_tts_publication_and_source_preservation(
     with ZipFile(output / "final.epub") as archive:
         assert archive.namelist()[0] == "mimetype"
         assert "OEBPS/toc.ncx" not in archive.namelist()
+        nav = ET.fromstring(archive.read("OEBPS/nav.xhtml"))
+        assert nav.find("x:body/x:nav", NS).get("role") == "doc-toc"
         for record in records:
             sentence = record["sentences"][0]
             root = ET.fromstring(archive.read("OEBPS/" + record["source"]["href"]))
@@ -114,6 +116,11 @@ def test_repair_preserves_ids_inline_content_and_note_text(tmp_path: Path) -> No
         f'<html xmlns="{XHTML}"><head><title/></head><body section="chapter">'
         '<h2 id="heading">II</h2><p id="sentence">Năm <em>1774</em> '
         '<a href="note:" title="1774 (chú thích của tác giả).">(2)</a>.</p>'
+        '<img src="../Images/b1vz-bia-1.jpg" alt=""/>'
+        '<img src="../Images/hero__section_12.jpg"/>'
+        '<svg xmlns="http://www.w3.org/2000/svg">'
+        '<image xmlns:xlink="http://www.w3.org/1999/xlink" '
+        'xlink:href="../Images/cover_l.jpg"/></svg>'
         "</body></html>"
     ).encode()
     with ZipFile(source, "w") as archive:
@@ -132,6 +139,26 @@ def test_repair_preserves_ids_inline_content_and_note_text(tmp_path: Path) -> No
         note = root.find(".//x:aside", NS)
         assert note.findtext("x:p", namespaces=NS) == "1774 (chú thích của tác giả)."
         assert sentence.find("x:a", NS).get("href") == "#" + note.get("id")
+        assert root.find(".//x:img", NS).get("alt") == (
+            "Chân dung nhà văn Nguyễn Huy Tưởng."
+        )
+        svg = root.find(".//{http://www.w3.org/2000/svg}svg")
+        assert svg.get("role") == "img"
+        assert svg.get("aria-label").startswith("Test — ")
+        back_cover = root.findall(".//x:img", NS)[1].get("alt")
+        assert "chồng chất giữa những oan khiên" in back_cover
+        assert "oan oan" not in back_cover
+        assert "\u201cbách tính\u201d" in back_cover
+        package = ET.fromstring(archive.read("OEBPS/package.opf"))
+        sufficient = package.findall(
+            "p:metadata/p:meta[@property='schema:accessModeSufficient']", NS
+        )
+        assert [m.text for m in sufficient] == ["textual"]
+        summary = package.findtext(
+            "p:metadata/p:meta[@property='schema:accessibilitySummary']",
+            namespaces=NS,
+        )
+        assert "Back-cover image text is absent from the audiobook" in summary
 
 
 def test_alignment_opus_keeps_exact_smil_timings(

@@ -71,7 +71,7 @@ def _metadata(package: Element, pathway: str) -> None:
         ("schema:accessMode", "visual"),
         (
             "schema:accessModeSufficient",
-            "textual" if pathway == "tts" else "textual,visual",
+            "textual",
         ),
         ("schema:accessibilityFeature", "tableOfContents"),
         ("schema:accessibilityFeature", "synchronizedAudioText"),
@@ -84,8 +84,9 @@ def _metadata(package: Element, pathway: str) -> None:
                 if pathway == "tts"
                 else "Vietnamese text with synchronized audiobook narration. "
                 "Some headings are unmatched; interpolated timings and audio-only "
-                "passages are retained. Image descriptions and final review "
-                "are pending."
+                "passages are retained. Back-cover image text is absent from "
+                "the audiobook. Final visual, audio and accessibility review "
+                "is pending."
             ),
         ),
     ):
@@ -108,7 +109,7 @@ def _tts_navigation(
     nav = ET.fromstring(
         f'<html xmlns="{XHTML}" xmlns:epub="{EPUB}" lang="vi" xml:lang="vi">'
         '<head><title>Mục lục</title></head><body><nav epub:type="toc" '
-        'id="toc"><h1>Mục lục</h1><ol/></nav></body></html>'
+        'id="toc" role="doc-toc"><h1>Mục lục</h1><ol/></nav></body></html>'
     )
     listing = nav.find("x:body/x:nav/x:ol", NS)
     for point in ncx.findall(".//n:navPoint", ncx_ns):
@@ -208,8 +209,38 @@ def _xhtml(root: Element, name: str, title: str) -> None:
     _notes(root, body)
 
 
+def _alignment_images(root: Element, title: str, author: str) -> None:
+    for image in root.findall(".//x:img", NS):
+        if image.get("src", "").endswith("b1vz-bia-1.jpg"):
+            image.set("alt", "Chân dung nhà văn Nguyễn Huy Tưởng.")
+        elif image.get("src", "").endswith("hero__section_12.jpg"):
+            image.set(
+                "alt",
+                "Đêm hội Long Trì, những sinh hoạt xưa ở kinh kỳ mà trong đó, "
+                "huyên náo những cảnh lộng hành bạo ngược của chị em bà Chúa Chè "
+                "người Kinh Bắc. Những đau khổ của người dân phải chịu đựng mọi "
+                "thời ăn chơi vô độ của các triều đại vua chúa. Nhưng chồng chất "
+                "giữa những oan khiên này, vẫn thấy được đời sống người Kẻ Chợ "
+                "cùng mọi quang cảnh phố phường sinh sôi. Đấy là sức sống âm thầm "
+                "mà mãnh liệt của \u201cbách tính\u201d đã làm nên bao đời Kẻ Chợ. "
+                "Thăng Long "
+                "nhộn nhịp suốt sáng không biết có đêm trong những đêm hội Long "
+                "Trì quanh Hồ Gươm, Hồ Tây... Nhà văn Tô Hoài. Giá: 39.000đ. "
+                "ISBN 978-604-2-01596-7. www.nxbkimdong.com.vn. "
+                "www.facebook.com/nxbkimdong. THƯ VIỆN EBOOK KIM ĐỒNG — "
+                "BECOME A MEMBER. Barcodes: 5151100030004; 8935244804317.",
+            )
+    for svg in root.findall(".//{http://www.w3.org/2000/svg}svg"):
+        image = svg.find("{http://www.w3.org/2000/svg}image")
+        if image is not None and image.get(
+            "{http://www.w3.org/1999/xlink}href", ""
+        ).endswith("cover_l.jpg"):
+            svg.set("role", "img")
+            svg.set("aria-label", f"{title} — {author}")
+
+
 def repair(source: Path, output: Path, pathway: str) -> None:
-    """Apply known source repairs; image descriptions remain human-review drafts."""
+    """Apply source repairs and reviewed image alternatives to the final copy."""
     edits = {}
     with ZipFile(source) as archive:
         package_path = next(n for n in archive.namelist() if n.endswith(".opf"))
@@ -220,6 +251,7 @@ def repair(source: Path, output: Path, pathway: str) -> None:
             package.find("p:manifest", NS),
         )
         title = metadata.findtext("d:title", namespaces=NS)
+        author = metadata.findtext("d:creator", namespaces=NS)
         _metadata(package, pathway)
         if pathway == "tts":
             _tts_navigation(package, archive, edits, directory)
@@ -227,6 +259,8 @@ def repair(source: Path, output: Path, pathway: str) -> None:
             if name.endswith((".html", ".xhtml")):
                 root = ET.fromstring(archive.read(name))
                 _xhtml(root, name, title)
+                if pathway == "alignment":
+                    _alignment_images(root, title, author)
                 edits[name] = tostring(root, encoding="utf-8", xml_declaration=True)
             elif name.endswith(".ncx") and pathway == "alignment":
                 ncx = ET.fromstring(archive.read(name))

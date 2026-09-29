@@ -7,7 +7,7 @@ Generated publications, audio, reports, and review material are under
 
 ## Reproduction
 
-Use fresh output directories. Set `TTS_SOURCE`, `ALIGNMENT_SOURCE`, `MODEL_GGUF`,
+Use fresh output directories. Set `TTS_SOURCE`, `MODEL_GGUF`,
 and `VOICE_DIR` to the existing bronze books, pinned VieNeu checkpoint, and
 Quỳnh Anh voice directory. The frozen frontend and assets are checked by the
 existing Issue #14 functions before synthesis.
@@ -85,7 +85,7 @@ files under `data/silver/issue-14/`, `data/silver/issue-14-reported/`, and
 ## Human review material
 
 Alignment review material includes the final EPUB, extracted final XHTML,
-author/chapter/note screenshots, source images, proposed image descriptions,
+author/chapter/note screenshots, source images, reviewed image alternatives,
 and 16 kHz mono PCM WAV excerpts decoded from the final Opus tracks.
 The excerpts cover source-track intervals 65.9–122.7 and 467.8–529 seconds
 on track 1, 0–34 seconds on track 2, 904–950.5 seconds on track 6, and the
@@ -98,3 +98,10 @@ backlinks in the final copy. Their exact note text and original sentence IDs
 remain available. Image-only back-cover content requires reviewed text
 alternatives. Accessibility summaries retain known synchronization limitations
 and do not assert completed human review.
+
+The user reviewed the cover/portrait alternatives and confirmed the back-cover
+readings "chồng chất" and "oan khiên" against magnified original pixels.
+The final image alternative contains the reviewed transcription. This text is
+absent from the audiobook; auditory access is not declared sufficient. No audio
+was added to the alignment pathway. The repaired alignment EPUB currently has
+zero EPUBCheck errors/warnings and no automated Ace findings.
