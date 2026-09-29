@@ -50,14 +50,7 @@ def sha256(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
-def synthesize(
-    output: Path,
-    model: Path,
-    voice_dir: Path,
-    image: str,
-    *,
-    reported: bool = False,
-) -> None:
+def synthesize(output: Path, model: Path, voice_dir: Path, image: str) -> None:
     """Synthesize prepared cases with separate preprocessing and runtime evidence."""
     model = model.resolve()
     voice_dir = voice_dir.resolve()
@@ -66,7 +59,7 @@ def synthesize(
     required = validate_inputs(model, voice_dir)
     output.joinpath("audio").mkdir(parents=True, exist_ok=True)
     output.joinpath("traces").mkdir(exist_ok=True)
-    settings = runtime_settings(model, required, image_info, reported=reported)
+    settings = runtime_settings(model, required, image_info)
     output.joinpath("runtime.json").write_text(
         json.dumps(settings, ensure_ascii=False, indent=2) + "\n", encoding="utf-8"
     )
@@ -244,15 +237,9 @@ def validate_inputs(model: Path, voice_dir: Path) -> list[Path]:
     return required
 
 
-def runtime_settings(
-    model: Path, required: list[Path], image: dict, *, reported: bool = False
-) -> dict:
+def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
     return {
-        "purpose": (
-            "reported evaluation; frozen Issue #14 TTS configuration"
-            if reported
-            else "frontend and synthesis-unit feasibility; not reported evaluation"
-        ),
+        "purpose": "frozen Issue #14 TTS configuration",
         "runtime": "audio.cpp",
         "image": image,
         "checkpoint": f"pnnbao-ump/VieNeu-TTS-v3-Turbo@{CHECKPOINT_REVISION}",
