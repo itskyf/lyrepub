@@ -25,28 +25,12 @@ services:
           create_host_path: false
           selinux: z
 
-    command:
-      - server
-      - --ui
-      - --host
-      - 0.0.0.0
-      - --port
-      - "8080"
-      - --backend
-      - cuda
+    command: [server, --ui, --host, 0.0.0.0, --port, "8080", --backend, cuda]
 
     healthcheck:
-      test:
-        - CMD
-        - curl
-        - --fail
-        - --silent
-        - --show-error
-        - --output
-        - /dev/null
-        - http://127.0.0.1:8080/health
-      start_period: 60s # upstream readiness window
-      start_interval: 1s # upstream readiness poll cadence
+      test: [CMD, curl, --fail, --silent, --show-error, --output, /dev/null, http://127.0.0.1:8080/health]
+      start_period: 60s # Do not count startup probe failures for the first 60s.
+      start_interval: 1s # Probe every second during that startup grace period.
 
   model-manager:
     build:
@@ -67,6 +51,4 @@ services:
           create_host_path: false
           selinux: z
 
-    entrypoint:
-      - /app/entrypoint.sh
-      - model-manager
+    entrypoint: [/app/entrypoint.sh, model-manager]
