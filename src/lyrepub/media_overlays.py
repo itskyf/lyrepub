@@ -1,11 +1,9 @@
 """Publish timed XHTML fragments as EPUB 3.3 Media Overlays."""
 
-import math
 import posixpath
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import UTC, datetime
-from decimal import Decimal
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from urllib.parse import unquote, urlsplit
 from xml.etree.ElementTree import Element, SubElement, tostring
@@ -30,8 +28,8 @@ class Timing:
 
     text_href: str
     audio_href: str
-    clip_begin: float
-    clip_end: float
+    clip_begin: timedelta
+    clip_end: timedelta
 
 
 def _resource_path(href: str, opf_dir: str) -> str:
@@ -64,8 +62,10 @@ def _audio_type(href: str, path: Path) -> str:
     return media
 
 
-def _clock(seconds: float | Decimal) -> str:
-    return f"{Decimal(str(seconds)):f}s"
+def _clock(duration: timedelta) -> str:
+    microseconds = duration // timedelta(microseconds=1)
+    seconds, fraction = divmod(microseconds, 1_000_000)
+    return f"{seconds}.{fraction:06d}".rstrip("0").rstrip(".") + "s"
 
 
 def _spine_items(book: epub.EpubBook) -> dict[str, tuple[int, str, dict[str, int]]]:
@@ -116,9 +116,9 @@ def _group_timings(
             msg = f"missing supplied audio: {timing.audio_href!r}"
             raise ValueError(msg)
         if not (
-            math.isfinite(timing.clip_begin)
-            and math.isfinite(timing.clip_end)
-            and 0 <= timing.clip_begin < timing.clip_end
+            isinstance(timing.clip_begin, timedelta)
+            and isinstance(timing.clip_end, timedelta)
+            and timedelta(0) <= timing.clip_begin < timing.clip_end
         ):
             msg = f"invalid clip times for {timing.text_href!r}"
             raise ValueError(msg)
@@ -163,10 +163,10 @@ def _add_audio(
 
 def _smil_content(
     rows: list[tuple[int, Timing, str]], xhtml_path: str, smil_path: str, opf_dir: str
-) -> tuple[bytes, Decimal]:
+) -> tuple[bytes, timedelta]:
     root = Element("smil", {"xmlns": _SMIL, "version": "3.0"})
     body = SubElement(root, "body")
-    duration = Decimal(0)
+    duration = timedelta(0)
     for _, timing, fragment in sorted(rows, key=lambda row: row[0]):
         par = SubElement(body, "par")
         text_path = posixpath.relpath(xhtml_path, posixpath.dirname(smil_path))
@@ -184,7 +184,7 @@ def _smil_content(
                 "clipEnd": _clock(timing.clip_end),
             },
         )
-        duration += Decimal(str(timing.clip_end)) - Decimal(str(timing.clip_begin))
+        duration += timing.clip_end - timing.clip_begin
     return tostring(root, encoding="utf-8", xml_declaration=True), duration
 
 
@@ -200,7 +200,7 @@ def _add_overlays(
     items = {item.get("id"): item for item in manifest.findall(f"{{{_OPF}}}item")}
     used_ids = set(items)
     additions: dict[str, bytes] = {}
-    total_duration = Decimal(0)
+    total_duration = timedelta(0)
     for index, href in enumerate(sorted(grouped, key=lambda h: spine_items[h][0])):
         _, item_id, _ = spine_items[href]
         xhtml_path = _resource_path(href, opf_dir)
