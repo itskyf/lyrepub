@@ -263,36 +263,37 @@ def test_clock_serializes_timedelta_exactly() -> None:
     assert _clock(timedelta(seconds=4, microseconds=166001)) == "4.166001s"
 
 
+def _sentence_xhtml(href: str) -> bytes:
+    document = Element("html", {"xmlns": _XHTML, "xml:lang": "vi"})
+    SubElement(SubElement(document, "head"), "title").text = "Test"
+    body = SubElement(document, "body")
+    if href == "two.xhtml":
+        SubElement(body, "h2").text = "Chapter."
+        paragraph = SubElement(body, "p")
+        paragraph.text = " First "
+        emphasis = SubElement(paragraph, "em", {"class": "voice"})
+        emphasis.text, emphasis.tail = "bold. Second", " word"
+        SubElement(paragraph, "br").tail = "end. "
+    else:
+        SubElement(body, "h2", {"id": "heading"}).text = "Last chapter."
+        SubElement(body, "p", {"xml:lang": "en"}).text = "Last sentence."
+    return tostring(document)
+
+
 def test_sentence_target_publication(tmp_path: Path, audio: Path) -> None:
     source, output = tmp_path / "targets.epub", tmp_path / "sentence-targets.epub"
     files = _source(source)
     timings = []
     expected = {}
     authored = {}
-    for spine_index, (href, body, sentences) in enumerate(
+
+    for spine_index, (href, sentences) in enumerate(
         [
-            (
-                "two.xhtml",
-                (
-                    '<h2>Chapter.</h2><p> First <em class="voice">bold. Second</em>'
-                    " word<br/>end. </p>"
-                ),
-                [["Chapter."], ["First bold.", "Second word end."]],
-            ),
-            (
-                "one.xhtml",
-                (
-                    '<h2 id="heading">Last chapter.</h2>'
-                    '<p xml:lang="en">Last sentence.</p>'
-                ),
-                [["Last chapter."], ["Last sentence."]],
-            ),
+            ("two.xhtml", [["Chapter."], ["First bold.", "Second word end."]]),
+            ("one.xhtml", [["Last chapter."], ["Last sentence."]]),
         ]
     ):
-        original = (
-            f'<html xmlns="{_XHTML}" xml:lang="vi"><head><title>Test</title></head>'
-            f"<body>{body}</body></html>"
-        )
+        original = _sentence_xhtml(href)
         authored[href] = original
         blocks = parse_blocks(original, spine_index, href, linear=True)
         targets = []
