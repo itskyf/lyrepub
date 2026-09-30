@@ -337,8 +337,11 @@ def _alignment_opening(
     package: Element, archive: ZipFile, edits: dict[str, bytes]
 ) -> None:
     """Move the spoken credit to the visible cover before biography playback."""
-    # MOSS and adjacent silence locate this boundary; Thorium playback was checked.
-    onset, name_onset, year_onset = "20.900s", "21.400s", "22.400s"
+    # Boundaries measured from the retained #15 emissions: biography onset
+    # 20.900 s (PulseVAD burst, MOSS 20.82 s agrees), Nguyễn 21.42 s, spoken
+    # years 22.58 s (word-level CTC forced alignment); values recorded in
+    # publication-validation.md.
+    onset, name_onset, year_onset = "20.900s", "21.400s", "22.600s"
     manifest = package.find("p:manifest", NS)
     cover = manifest.find("p:item[@href='Text/cover.xhtml']", NS)
     if cover is None or "OEBPS/Text/cover.xhtml" not in archive.namelist():

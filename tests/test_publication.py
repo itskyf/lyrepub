@@ -299,7 +299,7 @@ def test_alignment_opening_targets_visible_credit_before_biography(
         ] == [
             ("Text-section_11.html-s0", "20.900s"),
             ("Text-section_11.html-s1", "21.400s"),
-            ("Text-section_11.html-s2", "22.400s"),
+            ("Text-section_11.html-s2", "22.600s"),
             ("Text-section_11.html-s3", "26.100s"),
         ]
         package = ElementTree.fromstring(archive.read("OEBPS/package.opf"))
