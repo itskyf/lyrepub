@@ -15,13 +15,16 @@ Source and model locations are runtime inputs. Outputs live in gitignored data/.
 import argparse
 import asyncio
 import hashlib
-import importlib
 import json
 import logging
+import subprocess
 import tempfile
 from pathlib import Path
+from shutil import which
 
-from lyrepub.audio import run_tool
+from lyrepub.epub_text import extract_blocks
+from lyrepub.segmentation import segment_sentences
+from scripts import tts_synthesis
 from scripts.tts_synthesis import MANUAL_NORMALIZATIONS, normalize_slash_enumeration
 
 ISBN = "9786045633946"
@@ -65,8 +68,6 @@ def save_records(output: Path, records: list[dict]) -> None:
 
 
 def prepare(output: Path, source: Path) -> None:
-    extract_blocks = importlib.import_module("lyrepub.epub_text").extract_blocks
-
     if not source.is_file():
         raise FileNotFoundError(source)
     blocks = {(b.spine_index, b.block_index): b for b in extract_blocks(source)}
@@ -117,6 +118,10 @@ def prepare(output: Path, source: Path) -> None:
 
 def compare(output: Path, frozen: Path) -> None:
     """Compare frozen sentence inputs, timings and decoded Opus audio."""
+    ffmpeg = which("ffmpeg")
+    if ffmpeg is None:
+        message = "ffmpeg is required for benchmark PCM comparison"
+        raise FileNotFoundError(message)
     records = {record["key"]: record for record in load_records(output)}
     comparisons = []
     for baseline in load_records(frozen):
@@ -139,9 +144,9 @@ def compare(output: Path, frozen: Path) -> None:
             hashes = []
             for directory, sentence in ((frozen, old), (output, new)):
                 with tempfile.NamedTemporaryFile(suffix=".pcm") as pcm:
-                    run_tool(
+                    subprocess.run(
                         [
-                            "ffmpeg",
+                            ffmpeg,
                             "-v",
                             "error",
                             "-y",
@@ -150,7 +155,8 @@ def compare(output: Path, frozen: Path) -> None:
                             "-f",
                             "f32le",
                             pcm.name,
-                        ]
+                        ],
+                        check=True,
                     )
                     hashes.append(
                         hashlib.sha256(Path(pcm.name).read_bytes()).hexdigest()
@@ -180,12 +186,13 @@ def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("step", choices=("prepare", "synthesize", "compare"))
     parser.add_argument(
-        "--output", type=Path, default=Path("data/publications/tts-benchmark")
+        "--output", type=Path, default=Path("data/silver/issue-17/tts-benchmark")
+    )
+    parser.add_argument(
+        "--work", type=Path, default=Path("data/work/issue-17/tts-benchmark")
     )
     parser.add_argument("--source-epub", type=Path)
     parser.add_argument("--frozen", type=Path, default=Path("data/silver/issue-14"))
-    parser.add_argument("--model", type=Path)
-    parser.add_argument("--voice-dir", type=Path)
     parser.add_argument("--concurrency", type=int, default=1)
     args = parser.parse_args()
     if args.step == "compare":
@@ -196,19 +203,15 @@ def main() -> None:
     if args.step == "prepare":
         prepare(args.output, args.source_epub)
     elif args.step == "synthesize":
-        if args.model is None or args.voice_dir is None or args.concurrency <= 0:
-            parser.error(
-                "synthesize requires --model, --voice-dir and positive --concurrency"
-            )
-        synthesis = importlib.import_module("scripts.tts_synthesis")
+        if args.concurrency <= 0:
+            parser.error("synthesize requires positive --concurrency")
         records = load_records(args.output)
-        segmentation = importlib.import_module("lyrepub.segmentation")
         for record in records:
             source = record["source"]["text"]
-            record["sentences"] = synthesis.prepare_sentences(
+            record["sentences"] = tts_synthesis.prepare_sentences(
                 source,
                 normalize_slash_enumeration(source),
-                segmentation.segment_sentences(source),
+                segment_sentences(source),
                 record.get("manual_normalization"),
             )
             record["seed"] = (
@@ -219,9 +222,9 @@ def main() -> None:
             record["status"] = "preprocessed"
         save_records(args.output, records)
         asyncio.run(
-            synthesis.synthesize_records(
+            tts_synthesis.synthesize_records(
                 args.output,
-                (args.model.resolve(), args.voice_dir.resolve()),
+                args.work,
                 records,
                 args.concurrency,
                 filename="cases.json",

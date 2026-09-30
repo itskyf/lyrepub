@@ -44,6 +44,18 @@ Outputs are validated with EPUBCheck, Ace by DAISY, and focused manual inspectio
 
 The coursework also requires a DAISY 3 deliverable generated from the completed EPUB using a standard conversion workflow.
 
+## Local data
+
+`data/` is ignored by Git. Its directories have these roles:
+
+| Directory | Contents |
+| --- | --- |
+| `data/bronze/` | Immutable acquired inputs |
+| `data/silver/` | Durable, reusable experimental and processed artifacts |
+| `data/gold/` | Final deliverables |
+| `data/work/` | Disposable staging and diagnostics that can be regenerated |
+| `data/models/` | External model assets |
+
 ## Development
 
 The project uses [Pixi](https://pixi.prefix.dev/) for reproducible environments and system dependencies. Python package dependencies remain in standard `pyproject.toml` metadata so the package can also be installed in environments without Pixi.

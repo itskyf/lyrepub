@@ -1,7 +1,5 @@
 """TTS source mapping and HTTP contracts without standalone dependencies."""
 
-from pathlib import Path
-
 import pytest
 
 from lyrepub import segmentation
@@ -13,20 +11,6 @@ from scripts.tts_synthesis import normalize_slash_enumeration, prepare_sentences
 def frontend(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tts_synthesis, "frontend_chunks", lambda text: ([text], []))
     monkeypatch.setattr(tts_synthesis, "frontend_phonemes", lambda text: text)
-
-
-def test_runtime_requires_loaded_model(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(tts_synthesis, "validate_inputs", lambda *_args: [])
-    monkeypatch.setattr(
-        tts_synthesis,
-        "run_tool",
-        lambda command: (
-            '{"backend":"cuda"}' if command[-1].endswith("/health") else '{"data":[]}',
-            "",
-        ),
-    )
-    with pytest.raises(ValueError, match="model loaded"):
-        tts_synthesis.inspect_runtime(Path("model"), Path("voice"))
 
 
 def test_slash_enumeration_treatment() -> None:

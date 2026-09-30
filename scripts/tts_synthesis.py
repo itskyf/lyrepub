@@ -2,8 +2,6 @@
 
 import asyncio
 import hashlib
-import importlib
-import importlib.metadata
 import io
 import json
 import logging
@@ -15,13 +13,7 @@ if TYPE_CHECKING:
     from numpy import ndarray
     from zapros import AsyncClient
 
-from lyrepub.audio import encode_opus, run_tool
-from lyrepub.segmentation import (
-    SAT_NAME,
-    SAT_REVISION,
-    TOKENIZER_NAME,
-    TOKENIZER_REVISION,
-)
+from lyrepub.audio import encode_opus
 
 SAMPLE_RATE = 48000
 MANUAL_NORMALIZATIONS = {
@@ -29,19 +21,6 @@ MANUAL_NORMALIZATIONS = {
 }
 
 LOGGER = logging.getLogger(__name__)
-VIENEU_REVISION = "c1390abbdb2eedcdf58eafb546966c06ce27af71"
-SEA_REVISION = "dae5ca83ea45f356c43bdb70a1bcd42e8729ff16"
-DICTIONARY_SHA256 = "4346e690d0711ebc5231e7a42c5c88aaf6e40377e894b4617c018fd81c6f4096"
-CHECKPOINT_REVISION = "61b85e3d937fbbacb387714180e8182823512523"
-CHECKPOINT_SHA256 = "c9c23d51989382e27730077c2373023bcfb0891db63a1efec97fd73b4bd6b7dc"
-VOICE_SHA256 = {
-    "ref_codes.txt": (
-        "363b2eee93aeca4f789e1ce63ad904d7e0bef88bb20c830dd2e559ea3fe0054a"
-    ),
-    "speaker.emb.txt": (
-        "ab66bc624b0ffaa735c8ece1aa71b12f18b48bddc2e7cd27ba9eec3d85c2bce9"
-    ),
-}
 
 
 def normalize_slash_enumeration(text: str) -> str:
@@ -138,100 +117,17 @@ def prepare_sentences(
     return result
 
 
-def frontend_identity() -> dict:
-    """Record Python frontend provenance and verify the frozen dictionary."""
-    versions = {
-        name: importlib.metadata.version(name) for name in ("vieneu", "sea-g2p")
-    }
-    dictionary = importlib.metadata.distribution("sea-g2p").locate_file(
-        "sea_g2p/sea_g2p.bin"
-    )
-    digest = sha256(Path(dictionary))
-    if digest != DICTIONARY_SHA256:
-        message = "SEA-G2P dictionary differs from the feasibility pin"
-        raise ValueError(message)
-    return {
-        "versions": versions,
-        "vieneu_revision": VIENEU_REVISION,
-        "sea_g2p_revision": SEA_REVISION,
-        "dictionary_sha256": digest,
-        "normalization": "upstream Vietnamese SEA-G2P",
-        "chunking": {"max_chars": 256, "min_chunk_chars": 20},
-        "phonemization": "upstream phonemize_text_with_emotions",
-    }
-
-
-def validate_inputs(model: Path, voice_dir: Path) -> list[Path]:
-    """Verify pinned checkpoint and Quỳnh Anh conditioning assets."""
-    required = [model, voice_dir / "ref_codes.txt", voice_dir / "speaker.emb.txt"]
-    if any(not path.is_file() for path in required):
-        message = f"missing audio.cpp model or Quỳnh Anh assets: {required}"
-        raise FileNotFoundError(message)
-    if sha256(model) != CHECKPOINT_SHA256 or any(
-        sha256(path) != VOICE_SHA256[path.name] for path in required[1:]
-    ):
-        message = "checkpoint or Quỳnh Anh assets differ from the feasibility pin"
-        raise ValueError(message)
-    return required
-
-
-def runtime_settings(model: Path, required: list[Path], image: dict) -> dict:
-    return {
-        "runtime": "audio.cpp",
-        "image": image,
-        "checkpoint": f"pnnbao-ump/VieNeu-TTS-v3-Turbo@{CHECKPOINT_REVISION}",
-        "checkpoint_precision": "BF16 talker, F16 codec",
-        "checkpoint_sha256": sha256(model),
-        "voice": "Quỳnh Anh",
-        "voice_id": "quynh_anh",
-        "voice_package_path": "gguf/voices/quynh_anh",
-        "tts_input_treatment": (
-            "ordered slash enumeration: marker slash -> comma; "
-            "explicit source-case manual normalizations recorded with sentence inputs"
-        ),
-        "voice_assets_sha256": {path.name: sha256(path) for path in required[1:]},
-        "frontend": frontend_identity(),
-        "sentence_segmentation": {
-            "checkpoint": SAT_NAME,
-            "revision": SAT_REVISION,
-            "wtpsplit_version": importlib.metadata.version("wtpsplit"),
-            "tokenizer": TOKENIZER_NAME,
-            "tokenizer_revision": TOKENIZER_REVISION,
-        },
-        "backend": "cuda",
-        "seed_per_block": "14 + source spine index * 1000 + block index",
-        "sampling": {
-            "temperature": 0.8,
-            "top_k": 25,
-            "top_p": 0.95,
-            "repetition_penalty": 1.2,
-            "repetition_window": 64,
-            "max_tokens": 300,
-            "frame_cap": True,
-            "do_sample": True,
-            "babble_retries": 2,
-        },
-        "audio_cpp_chunking": {
-            "text_chunk_size": "exact prepared phoneme UTF-8 byte length per request",
-            "text_chunk_min": 20,
-            "native_frontend": "not invoked: prepared phonemes, no g2p_dict",
-        },
-        "pcm_channels": "stereo decoder output averaged to mono for upstream join",
-        "internal_join": "upstream join_audio_chunks and gaps_to_silence",
-        "sentence_join": "upstream join_audio_chunks with sentence gap 0.50 s",
-    }
-
-
-def package_audio(output: Path, name: str, pcm: "ndarray", rate: int) -> dict:
+def package_audio(
+    output: Path, work: Path, name: str, pcm: "ndarray", rate: int
+) -> dict:
     """Encode joined narration as Opus and record measured clip duration."""
-    wav = output / "audio" / f"{name}.wav"
+    wav = work / "audio" / f"{name}.wav"
     opus = output / "audio" / f"{name}.opus"
-    sf = importlib.import_module("soundfile")
+    import soundfile
 
-    sf.write(wav, pcm, rate, subtype="PCM_16")
+    soundfile.write(wav, pcm, rate, subtype="PCM_16")
     duration = str(encode_opus(wav, opus))
     return {
-        "audio": f"audio/{name}.wav",
         "packaged_audio": f"audio/{name}.opus",
         "pcm_samples": len(pcm),
         "sample_rate": rate,
@@ -241,24 +137,29 @@ def package_audio(output: Path, name: str, pcm: "ndarray", rate: int) -> dict:
 
 
 def frontend_chunks(text: str) -> tuple[list[str], list[float]]:
-    frontend = importlib.import_module("vieneu_utils.phonemize_text")
-    return frontend.normalize_to_chunks_v3_with_gaps(text)
+    from vieneu_utils.phonemize_text import normalize_to_chunks_v3_with_gaps
+
+    return normalize_to_chunks_v3_with_gaps(text)
 
 
 def frontend_phonemes(text: str) -> str:
-    frontend = importlib.import_module("vieneu_utils.phonemize_text")
-    return frontend.phonemize_text_with_emotions(text)
+    from vieneu_utils.phonemize_text import phonemize_text_with_emotions
+
+    return phonemize_text_with_emotions(text)
 
 
 def read_pcm(source: Path | io.BytesIO) -> tuple["ndarray", int]:
-    sf = importlib.import_module("soundfile")
-    return sf.read(source, dtype="float32", always_2d=True)
+    import soundfile
+
+    return soundfile.read(source, dtype="float32", always_2d=True)
 
 
 async def request_audio(
-    client: "AsyncClient", semaphore: asyncio.Semaphore, output: Path, chunk: dict
-) -> None:
+    client: "AsyncClient", semaphore: asyncio.Semaphore, work: Path, chunk: dict
+) -> Path:
     """Send one frozen phoneme chunk and reject HTTP or invalid WAV results."""
+    from numpy import isfinite
+
     phonemes = chunk["phonemes"]
     if not phonemes.strip() or "\n" in phonemes:
         message = "prepared request must contain one nonempty phoneme paragraph"
@@ -290,19 +191,16 @@ async def request_audio(
             message = "audio.cpp returned a non-WAV response"
             raise ValueError(message)
         pcm, rate = await asyncio.to_thread(read_pcm, io.BytesIO(content))
-        if (
-            rate != SAMPLE_RATE
-            or not len(pcm)
-            or not importlib.import_module("numpy").isfinite(pcm).all()
-        ):
+        if rate != SAMPLE_RATE or not len(pcm) or not isfinite(pcm).all():
             message = "audio.cpp returned invalid PCM"
             raise ValueError(message)
-        chunk["audio"] = f"audio/{chunk['key']}.wav"
-        (output / chunk["audio"]).write_bytes(content)
+        wav = work / "audio" / f"{chunk['key']}.wav"
+        wav.write_bytes(content)
+        return wav
 
 
 async def synthesize_sentences(
-    output: Path,
+    paths: tuple[Path, Path],
     client: "AsyncClient",
     semaphore: asyncio.Semaphore,
     record: dict,
@@ -310,7 +208,8 @@ async def synthesize_sentences(
     join_block: bool = False,
 ) -> None:
     """Join frontend chunks, package sentence clips and optionally a benchmark block."""
-    core = importlib.import_module("vieneu_utils.core_utils")
+    output, work = paths
+    from vieneu_utils import core_utils
 
     sentences_pcm = []
     rate = None
@@ -320,124 +219,52 @@ async def synthesize_sentences(
         for index, chunk in enumerate(sentence["chunks"]):
             chunk["key"] = f"{name},chunk={index:02d}"
             chunk["seed"] = record["seed"]
-            await request_audio(client, semaphore, output, chunk)
-            pcm, chunk_rate = await asyncio.to_thread(read_pcm, output / chunk["audio"])
+            wav = await request_audio(client, semaphore, work, chunk)
+            pcm, chunk_rate = await asyncio.to_thread(read_pcm, wav)
             if rate is not None and rate != chunk_rate:
                 message = "inconsistent PCM sample rates"
                 raise ValueError(message)
             rate = chunk_rate
             chunks_pcm.append(pcm.mean(axis=1))
-        pcm = core.join_audio_chunks(
-            chunks_pcm, rate, silence_ps=core.gaps_to_silence(sentence["gaps"])
+        pcm = core_utils.join_audio_chunks(
+            chunks_pcm, rate, silence_ps=core_utils.gaps_to_silence(sentence["gaps"])
         )
-        sentence.update(await asyncio.to_thread(package_audio, output, name, pcm, rate))
+        sentence.update(
+            await asyncio.to_thread(package_audio, output, work, name, pcm, rate)
+        )
         if join_block:
             sentences_pcm.append(pcm)
     if join_block:
-        pcm = core.join_audio_chunks(
+        pcm = core_utils.join_audio_chunks(
             sentences_pcm, rate, silence_ps=[0.5] * (len(sentences_pcm) - 1)
         )
         record.update(
             await asyncio.to_thread(
-                package_audio, output, f"case={record['key']}", pcm, rate
+                package_audio, output, work, f"case={record['key']}", pcm, rate
             )
         )
     record["status"] = "ok"
 
 
-def inspect_runtime(model: Path, voice: Path) -> dict:
-    """Verify the configured, loaded Compose runtime and frozen host assets."""
-    required = validate_inputs(model, voice)
-    stdout, _ = run_tool(
-        ["curl", "--fail", "--silent", "--show-error", "http://127.0.0.1:8080/health"]
-    )
-    health_data = json.loads(stdout)
-    stdout, _ = run_tool(
-        [
-            "curl",
-            "--fail",
-            "--silent",
-            "--show-error",
-            "http://127.0.0.1:8080/v1/models?include_session_options=true",
-        ]
-    )
-    models = json.loads(stdout)["data"]
-    loaded = next((m for m in models if m["id"] == "vieneu"), None)
-    if (
-        loaded is None
-        or health_data["backend"] != "cuda"
-        or not loaded["loaded"]
-        or loaded["family"] != "vieneu_v3_turbo"
-    ):
-        message = "Compose server must have the CUDA VieNeu v3 Turbo model loaded"
-        raise ValueError(message)
-    container_id, _ = run_tool(["podman", "compose", "ps", "--quiet", "audiocpp"])
-    stdout, _ = run_tool(["podman", "inspect", container_id.strip()])
-    container = json.loads(stdout)[0]
-    stdout, _ = run_tool(["podman", "image", "inspect", container["Image"]])
-    image = json.loads(stdout)[0]
-    stdout, _ = run_tool(
-        ["podman", "compose", "exec", "--no-TTY", "audiocpp", "cat", "/app/server.json"]
-    )
-    config = json.loads(stdout)
-    entry = {m["id"]: m for m in config["models"]}["vieneu"]
-    models_mount = {m["Destination"]: m for m in container["Mounts"]}["/app/models"]
-
-    def host_asset(path: str) -> Path:
-        return Path(models_mount["Source"]) / Path(path).relative_to("/app/models")
-
-    if (
-        host_asset(loaded["path"]) != model
-        or entry["path"] != loaded["path"]
-        or config["backend"] != "cuda"
-        or any(
-            sha256(host_asset(entry["default_request_options"][option]))
-            != VOICE_SHA256[name]
-            for option, name in [
-                ("reference_codes_file", "ref_codes.txt"),
-                ("speaker_embedding_file", "speaker.emb.txt"),
-            ]
-        )
-    ):
-        message = "server model or voice differs from verified host assets"
-        raise ValueError(message)
-    settings = runtime_settings(
-        model,
-        required,
-        {
-            "id": image["Id"],
-            "repo_digests": image["RepoDigests"],
-            "revision": image["Config"]["Labels"].get(
-                "org.opencontainers.image.revision"
-            ),
-            "compose_image": container["Config"]["Image"],
-        },
-    )
-    settings["server"] = {"health": health_data, "model": loaded, "config": config}
-    settings["execution"] = (
-        "Compose HTTP speech requests; one client and semaphore; seed reset per chunk"
-    )
-    return settings
-
-
 async def synthesize_records(
     output: Path,
-    assets: tuple[Path, Path],
+    work: Path,
     records: list[dict],
     concurrency: int,
     *,
     filename: str,
 ) -> None:
     """Retain failures, save resumable records and never switch inference paths."""
-    zapros = importlib.import_module("zapros")
+    import zapros
+
     join_block = filename == "cases.json"
-    model, voice = assets
 
     if concurrency <= 0:
         message = "concurrency must be positive"
         raise ValueError(message)
     await asyncio.to_thread(output.mkdir, parents=True, exist_ok=True)
     (output / "audio").mkdir(exist_ok=True)
+    (work / "audio").mkdir(parents=True, exist_ok=True)
     if any(r.get("status") == "preprocessing_failure" for r in records):
         message = "unresolved preprocessing failures"
         raise ValueError(message)
@@ -445,23 +272,11 @@ async def synthesize_records(
     async with zapros.AsyncClient(
         handler=zapros.AsyncPyreqwestHandler(), base_url="http://127.0.0.1:8080"
     ) as client:
-        settings = await asyncio.to_thread(inspect_runtime, model, voice)
-        settings["purpose"] = "TTS benchmark" if join_block else "full TTS publication"
-        if not join_block:
-            settings.pop("sentence_join")
-            settings["seed_per_block"] = (
-                "14 + bronze source spine index * 1000 + block index"
-            )
-        runtime = output / "runtime.json"
-        if runtime.exists() and json.loads(runtime.read_text()) != settings:
-            message = "runtime differs from existing synthesis"
-            raise ValueError(message)
-        runtime.write_text(json.dumps(settings, ensure_ascii=False, indent=2) + "\n")
 
         async def run(record: dict) -> None:
             try:
                 await synthesize_sentences(
-                    output, client, semaphore, record, join_block=join_block
+                    (output, work), client, semaphore, record, join_block=join_block
                 )
                 record.pop("error", None)
             except Exception as exc:

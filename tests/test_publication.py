@@ -1,6 +1,5 @@
 """Final-publication paths preserve source text and experimental evidence."""
 
-import hashlib
 import json
 import shutil
 from pathlib import Path
@@ -72,7 +71,7 @@ def test_full_tts_publication_and_source_preservation(
     _tts_source(source)
     digest = sha256(source)
     monkeypatch.setattr(tts_publication, "segment_sentences", lambda text: [text])
-    tts_publication.prepare(source, output)
+    tts_publication.prepare(source, output, output / "work")
     monkeypatch.setattr(
         tts_publication, "ogg_duration", lambda _p: publication.Decimal("1.25")
     )
@@ -86,7 +85,7 @@ def test_full_tts_publication_and_source_preservation(
         sentence.update(packaged_audio=audio, clip_begin="0.000", clip_end="1.25")
         record["status"] = "ok"
     tts_publication.save_records(output, records)
-    tts_publication.publish(source, output)
+    tts_publication.publish(source, output, output / "work", output / "final.epub")
     assert sha256(source) == digest
     with ZipFile(output / "final.epub") as archive:
         assert archive.namelist()[0] == "mimetype"
@@ -115,7 +114,7 @@ def test_full_tts_publication_and_source_preservation(
     records[0]["sentences"][0]["source_text"] = "changed"
     tts_publication.save_records(output, records)
     with pytest.raises(ValueError, match="source text drift"):
-        tts_publication.publish(source, output)
+        tts_publication.publish(source, output, output / "work", output / "final.epub")
 
 
 @pytest.mark.usefixtures("frontend", "plain_tts_source")
@@ -126,13 +125,13 @@ def test_tts_rejects_incomplete_coverage_and_synthesis(
     source, output = tmp_path / "source.epub", tmp_path / "tts"
     _tts_source(source)
     monkeypatch.setattr(tts_publication, "segment_sentences", lambda text: [text])
-    tts_publication.prepare(source, output)
+    tts_publication.prepare(source, output, output / "work")
     records = tts_publication.load_records(output)
     with pytest.raises(ValueError, match="incomplete synthesis"):
-        tts_publication.publish(source, output)
+        tts_publication.publish(source, output, output / "work", output / "final.epub")
     tts_publication.save_records(output, records[:-1])
     with pytest.raises(ValueError, match="cover source blocks exactly"):
-        tts_publication.publish(source, output)
+        tts_publication.publish(source, output, output / "work", output / "final.epub")
 
 
 def test_ncx_navigation_keeps_nested_order_labels_and_targets(tmp_path: Path) -> None:
@@ -172,6 +171,53 @@ def test_ncx_navigation_keeps_nested_order_labels_and_targets(tmp_path: Path) ->
         section.findtext("x:a", namespaces=NS),
         section.find("x:a", NS).get("href"),
     ) == ("Section A", "one.xhtml#second")
+
+
+@pytest.mark.usefixtures("frontend", "plain_tts_source")
+def test_distribution_boilerplate_excluded_without_renumbering(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    source, output = tmp_path / "source.epub", tmp_path / "tts"
+    _tts_source(source)
+    with ZipFile(source) as archive:
+        files = {name: archive.read(name) for name in archive.namelist()}
+    files["OEBPS/two.xhtml"] = (
+        f'<html xmlns="{XHTML}"><head><title>Chapter</title></head><body>'
+        '<div class="header">Thăng Long Nổi Giận</div>'
+        '<div class="author">Hoàng Quốc Hải</div>'
+        '<author><div class="author">www.dtv-ebook.com</div></author>'
+        "<h4>Chương 1</h4><p>Subsequent narration.</p></body></html>"
+    ).encode()
+    with ZipFile(source, "w") as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    original = next(
+        block
+        for block in tts_publication.extract_blocks(source)
+        if block.text == "Subsequent narration."
+    )
+    monkeypatch.setattr(tts_publication, "segment_sentences", lambda text: [text])
+    tts_publication.prepare(source, output, output / "work")
+    records = tts_publication.load_records(output)
+    assert all(
+        sentence["source_text"] not in publication.DISTRIBUTION_HEADER
+        for record in records
+        for sentence in record["sentences"]
+    )
+    record = next(
+        r for r in records if r["sentences"][0]["source_text"] == original.text
+    )
+    assert record["key"] == f"s{original.spine_index}-b{original.block_index}"
+    assert record["source"]["element_path"] == list(original.element_path)
+    assert record["seed"] == 14 + original.spine_index * 1000 + original.block_index
+    final = tmp_path / "final.epub"
+    repair(source, final, "tts")
+    with ZipFile(final) as archive:
+        chapter = archive.read("OEBPS/two.xhtml")
+        assert all(
+            text.encode() not in chapter for text in publication.DISTRIBUTION_HEADER
+        )
+        assert b"Subsequent narration." in chapter
 
 
 def test_repair_preserves_ids_inline_content_and_note_text(tmp_path: Path) -> None:
@@ -277,7 +323,7 @@ def test_alignment_opus_keeps_exact_smil_timings(
             publication.Decimal("1.2"),
         )[1],
     )
-    publication.package_alignment(source, output)
+    publication.package_alignment(source, output / "final.epub", output / "work")
     assert sha256(source) == digest
     with ZipFile(output / "final.epub") as archive:
         assert "OEBPS/Audio/track.mp3" not in archive.namelist()
@@ -299,7 +345,7 @@ def test_alignment_opus_keeps_exact_smil_timings(
         publication, "encode_opus", lambda _s, _target: publication.Decimal("1.1")
     )
     with pytest.raises(ValueError, match="exceeds packaged audio"):
-        publication.package_alignment(source, output)
+        publication.package_alignment(source, output / "final.epub", output / "work")
 
 
 def test_alignment_report_rejects_changed_smil_timing(tmp_path: Path) -> None:
@@ -407,7 +453,7 @@ def test_reviewed_boundary_joins_preserve_authored_offsets(
     monkeypatch.setattr(tts_publication, "extract_blocks", lambda _p: [block])
     monkeypatch.setattr(tts_publication, "segment_sentences", lambda _t: segments)
     output = tmp_path / "tts"
-    tts_publication.prepare(source, output)
+    tts_publication.prepare(source, output, output / "work")
     record = tts_publication.load_records(output)[0]
     sentence = next(s for s in record["sentences"] if s["source_text"] == joined)
     assert (sentence["source_start"], sentence["source_end"]) == offsets
@@ -418,7 +464,7 @@ def test_reviewed_boundary_joins_preserve_authored_offsets(
 
 
 def test_reviewed_initial_corrections_preserve_bronze_source(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
     source, output = tmp_path / "source.epub", tmp_path / "corrected.epub"
     chapter_one = (
@@ -431,20 +477,6 @@ def test_reviewed_initial_corrections_preserve_bronze_source(
         '<p>"P hú quốc Cường binh sách" của Trần Hưng Đạo.</p>'
         '<p>"P</p><p>Lệnh vua ban khắp nước.</p></body></html>'
     )
-    expected = {}
-    for name, content, duplicate in (
-        ("OEBPS/Text/1.html", chapter_one, "V"),
-        ("OEBPS/Text/12.html", chapter_twelve, '"P'),
-    ):
-        paragraphs = ElementTree.fromstring(content).findall("x:body/x:p", NS)
-        expected[name] = (
-            duplicate,
-            tuple(
-                hashlib.sha256((p.text or "").encode()).hexdigest()
-                for p in paragraphs[:3]
-            ),
-        )
-    monkeypatch.setattr(publication, "REVIEWED_CONTEXT", expected)
     with ZipFile(source, "w") as archive:
         archive.writestr("OEBPS/Text/1.html", chapter_one)
         archive.writestr("OEBPS/Text/12.html", chapter_twelve)
@@ -465,28 +497,26 @@ def test_reviewed_initial_corrections_preserve_bronze_source(
 
 
 @pytest.mark.parametrize(
-    "defect", ["missing-resource", "missing-paragraph", "changed-context"]
+    "defect", ["missing-resource", "missing-paragraph", "ambiguous", "wrong"]
 )
-def test_reviewed_initial_correction_fails_closed(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, defect: str
-) -> None:
+def test_reviewed_initial_correction_fails_closed(tmp_path: Path, defect: str) -> None:
     source, output = tmp_path / "source.epub", tmp_path / "corrected.epub"
-    first = ["Expected sentence.", "V", "Following dialogue."]
-    second = ['"P hú text.', '"P', "Following narration."]
-    expected = {}
-    for name, paragraphs, duplicate in (
-        ("OEBPS/Text/1.html", first, "V"),
-        ("OEBPS/Text/12.html", second, '"P'),
-    ):
-        expected[name] = (
-            duplicate,
-            tuple(hashlib.sha256(p.encode()).hexdigest() for p in paragraphs),
-        )
-    monkeypatch.setattr(publication, "REVIEWED_CONTEXT", expected)
+    first = [
+        "Vừa bước vào tới cửa cung Thánh từ, vua đã sụp lạy:",
+        "V",
+        "- Trình phụ hoàng.",
+    ]
+    second = [
+        '"P hú quốc Cường binh sách" của Trần Hưng Đạo.',
+        '"P',
+        "Lệnh vua ban khắp nước.",
+    ]
     if defect == "missing-paragraph":
         second.pop(1)
-    elif defect == "changed-context":
-        second[2] = "Changed narration."
+    elif defect == "ambiguous":
+        second.extend(second.copy())
+    else:
+        second[2] = "Unrelated narration."
     with ZipFile(source, "w") as archive:
         for name, paragraphs in (
             ("OEBPS/Text/1.html", first),

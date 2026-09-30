@@ -1,7 +1,6 @@
 """Repair the two source-specific publications without modifying evidence."""
 
 import argparse
-import hashlib
 import json
 import posixpath
 from datetime import UTC, datetime
@@ -21,29 +20,28 @@ EPUB = "http://www.idpf.org/2007/ops"
 SMIL = "http://www.w3.org/ns/SMIL"
 DC = "http://purl.org/dc/elements/1.1/"
 NS = {"p": OPF, "x": XHTML, "s": SMIL, "d": DC}
+DISTRIBUTION_HEADER = (
+    "Thăng Long Nổi Giận",
+    "Hoàng Quốc Hải",
+    "www.dtv-ebook.com",
+)
 
 
 register_namespace("", XHTML)
 register_namespace("epub", EPUB)
 register_namespace("dc", DC)
 
-# Pin complete reviewed paragraphs without duplicating the book's text in code.
+# Exact local context for the two reviewed duplicate-initial corrections.
 REVIEWED_CONTEXT = {
     "OEBPS/Text/1.html": (
+        "Vừa bước vào tới cửa cung Thánh từ",
         "V",
-        (
-            "4e01f496d6bf1484f2f58d43d600add715d158de645c515624a451f49be84623",
-            "de5a6f78116eca62d7fc5ce159d23ae6b889b365a1739ad2cf36f925a140d0cc",
-            "9c4fe286bb8e87f0ab098f835b79e0c2171878172683593763f21cae4ed3f82e",
-        ),
+        "- Trình phụ hoàng.",
     ),
     "OEBPS/Text/12.html": (
+        '"P hú quốc Cường binh sách"',
         '"P',
-        (
-            "791a2332317bd031091fc2ae03fc7d743975bbff2b76141c60f19100007579fb",
-            "d64c584c2c97924407a327cfb5e2dfe5e27e8fc901686e0c32bc7017d21d6f63",
-            "8f64ce92cbd2b514406ca9fcc9e29983e24d58c968312e5c64e7504a6e7abb21",
-        ),
+        "Lệnh vua ban khắp nước",
     ),
 }
 
@@ -247,9 +245,8 @@ def _xhtml(root: Element, name: str, title: str, pathway: str) -> None:
     if heading is not None:
         heading.tag = f"{{{XHTML}}}h1"
         heading.set("class", (heading.get("class", "") + " lyrepub-heading").strip())
-    for element in root.iter():
-        if pathway == "tts" and element.tag == f"{{{XHTML}}}author":
-            element.tag = f"{{{XHTML}}}div"
+    if pathway == "tts":
+        _remove_distribution_boilerplate(body)
     for link in list(head.findall("x:link", NS)):
         if pathway == "alignment" and link.get("href") == "../Styles/book-style-3.css":
             head.remove(link)
@@ -258,6 +255,27 @@ def _xhtml(root: Element, name: str, title: str, pathway: str) -> None:
             nav.set("role", "doc-toc")
     if pathway == "alignment":
         _notes(root, body)
+
+
+def _remove_distribution_boilerplate(body: Element) -> None:
+    if len(body) < len(DISTRIBUTION_HEADER):
+        return
+    title, author, distributor = body[: len(DISTRIBUTION_HEADER)]
+    if (
+        title.tag == f"{{{XHTML}}}div"
+        and title.get("class") == "header"
+        and " ".join(title.itertext()).strip() == DISTRIBUTION_HEADER[0]
+        and author.tag == f"{{{XHTML}}}div"
+        and author.get("class") == "author"
+        and " ".join(author.itertext()).strip() == DISTRIBUTION_HEADER[1]
+        and distributor.tag == f"{{{XHTML}}}author"
+        and len(distributor) == 1
+        and distributor[0].tag == f"{{{XHTML}}}div"
+        and distributor[0].get("class") == "author"
+        and " ".join(distributor[0].itertext()).strip() == DISTRIBUTION_HEADER[2]
+    ):
+        for element in (title, author, distributor):
+            body.remove(element)
 
 
 def _alignment_images(root: Element, title: str, author: str) -> None:
@@ -369,32 +387,40 @@ def repair(source: Path, output: Path, pathway: str) -> None:
 
 
 def correct_tts_source(source: Path, output: Path) -> None:
-    """Correct reviewed duplicate initials in the final TTS source copy."""
+    """Correct the two reviewed duplicate initials in the final source copy."""
     edits = {}
     with ZipFile(source) as archive:
-        for name, (duplicate, context) in REVIEWED_CONTEXT.items():
+        for name, (before, duplicate, after) in REVIEWED_CONTEXT.items():
             if name not in archive.namelist():
                 message = f"reviewed duplicate-initial resource missing: {name}"
                 raise ValueError(message)
             root = ElementTree.fromstring(archive.read(name))
             body = root.find("x:body", NS)
-            paragraphs = body.findall("x:p", NS) if body is not None else []
-            if (
-                len(paragraphs) < len(context)
-                or any(p.attrib or len(p) for p in paragraphs[: len(context)])
-                or tuple(
-                    hashlib.sha256((p.text or "").encode()).hexdigest()
-                    for p in paragraphs[: len(context)]
+            children = list(body) if body is not None else []
+            targets = [
+                index
+                for index in range(1, len(children) - 1)
+                if all(
+                    element.tag == f"{{{XHTML}}}p"
+                    and not element.attrib
+                    and not len(element)
+                    for element in children[index - 1 : index + 2]
                 )
-                != context
-            ):
+                and (children[index - 1].text or "").startswith(before)
+                and children[index].text == duplicate
+                and (children[index + 1].text or "").startswith(after)
+            ]
+            if len(targets) != 1:
                 message = (
-                    f"reviewed duplicate-initial context differs from source: {name}"
+                    f"reviewed duplicate-initial target missing or ambiguous: {name}"
                 )
                 raise ValueError(message)
+            index = targets[0]
             if duplicate == '"P':
-                paragraphs[0].text = paragraphs[0].text.replace('"P hú', '"Phú', 1)
-            body.remove(paragraphs[1])
+                children[index - 1].text = children[index - 1].text.replace(
+                    '"P hú', '"Phú', 1
+                )
+            body.remove(children[index])
             edits[name] = tostring(root, encoding="utf-8", xml_declaration=True)
     write_epub(source, output, edits, set())
 
@@ -442,14 +468,13 @@ def verify_alignment(frozen: Path, regenerated: Path, epub: Path) -> None:
                 raise ValueError(msg)
 
 
-def package_alignment(source: Path, output: Path) -> None:
+def package_alignment(source: Path, final: Path, work: Path) -> None:
     """Replace embedded MP3s with Opus, retaining SMIL clip values exactly."""
-    if source.resolve() == (output / "final.epub").resolve():
+    if source.resolve() == final.resolve():
         msg = "source and output EPUB must differ"
         raise ValueError(msg)
-    output.mkdir(parents=True, exist_ok=True)
-    work = output / "work"
-    work.mkdir(exist_ok=True)
+    final.parent.mkdir(parents=True, exist_ok=True)
+    work.mkdir(parents=True, exist_ok=True)
     edits, removed, durations = {}, set(), {}
     with ZipFile(source) as archive:
         package_path = next(n for n in archive.namelist() if n.endswith(".opf"))
@@ -492,18 +517,23 @@ def package_alignment(source: Path, output: Path) -> None:
         edits[package_path] = tostring(package, encoding="utf-8", xml_declaration=True)
     repackaged = work / "opus.epub"
     write_epub(source, repackaged, edits, removed)
-    repair(repackaged, output / "final.epub", "alignment")
+    repair(repackaged, final, "alignment")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, required=True)
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--output", type=Path, default=Path("data/gold/dem-hoi-long-tri.epub")
+    )
+    parser.add_argument(
+        "--work", type=Path, default=Path("data/work/issue-17/dem-hoi-long-tri")
+    )
     parser.add_argument("--frozen-report", type=Path, required=True)
     parser.add_argument("--regenerated-report", type=Path, required=True)
     args = parser.parse_args()
     verify_alignment(args.frozen_report, args.regenerated_report, args.source)
-    package_alignment(args.source, args.output)
+    package_alignment(args.source, args.output, args.work)
 
 
 if __name__ == "__main__":

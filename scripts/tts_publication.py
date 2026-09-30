@@ -25,10 +25,15 @@ from zipfile import ZipFile
 from defusedxml import ElementTree
 
 from lyrepub.audio import ogg_duration
-from lyrepub.epub_text import extract_blocks, materialize_sentence_targets
+from lyrepub.epub_text import Block, extract_blocks, materialize_sentence_targets
 from lyrepub.media_overlays import Timing, publish_media_overlays
 from lyrepub.segmentation import segment_sentences
-from scripts.publication import correct_tts_source, publication_metadata, repair
+from scripts.publication import (
+    DISTRIBUTION_HEADER,
+    correct_tts_source,
+    publication_metadata,
+    repair,
+)
 from scripts.tts_synthesis import (
     MANUAL_NORMALIZATIONS,
     normalize_slash_enumeration,
@@ -38,6 +43,17 @@ from scripts.tts_synthesis import (
 )
 
 LOGGER = logging.getLogger(__name__)
+
+
+def _narration_blocks(source: Path) -> list[Block]:
+    boilerplate = set(
+        zip(DISTRIBUTION_HEADER, ((1, 0), (1, 1), (1, 2, 0)), strict=True)
+    )
+    return [
+        block
+        for block in extract_blocks(source)
+        if (block.text, block.element_path) not in boilerplate
+    ]
 
 
 def load_records(output: Path) -> list[dict]:
@@ -50,21 +66,24 @@ def save_records(output: Path, records: list[dict]) -> None:
     )
 
 
-def prepare(source: Path, output: Path) -> None:
+def prepare(source: Path, output: Path, work: Path) -> None:
     """Prepare all readable source blocks without storing duplicate block text."""
     if (output / "sentences.json").exists():
         raise FileExistsError(output / "sentences.json")
     output.mkdir(parents=True, exist_ok=True)
-    corrected = output / "corrected-source.epub"
+    work.mkdir(parents=True, exist_ok=True)
+    corrected = work / "corrected-source.epub"
     correct_tts_source(source, corrected)
     records = []
     bronze_blocks = [
         block
-        for block in extract_blocks(source)
+        for block in _narration_blocks(source)
         if (block.href, block.text)
         not in {("Text/1.html", "V"), ("Text/12.html", '"P')}
     ]
-    for original, block in zip(bronze_blocks, extract_blocks(corrected), strict=True):
+    for original, block in zip(
+        bronze_blocks, _narration_blocks(corrected), strict=True
+    ):
         expected_text = (
             original.text.replace('"P hú', '"Phú', 1)
             if original.href == "Text/12.html"
@@ -115,7 +134,6 @@ def prepare(source: Path, output: Path) -> None:
         record = {
             "key": f"s{block.spine_index}-b{block.block_index}",
             "source": location,
-            "bronze_block_index": original.block_index,
             "seed": 14 + original.spine_index * 1000 + original.block_index,
             "sentences": sentences,
             "status": "preprocessed",
@@ -150,13 +168,13 @@ def prepare(source: Path, output: Path) -> None:
     )
 
 
-def synthesize(output: Path, model: Path, voice: Path, concurrency: int = 1) -> None:
+def synthesize(output: Path, work: Path, concurrency: int = 1) -> None:
     """Resume completed blocks through the Compose audio.cpp server."""
     records = load_records(output)
     asyncio.run(
         synthesize_records(
             output,
-            (model.resolve(), voice.resolve()),
+            work,
             records,
             concurrency,
             filename="sentences.json",
@@ -164,22 +182,22 @@ def synthesize(output: Path, model: Path, voice: Path, concurrency: int = 1) -> 
     )
 
 
-def _prepared_source(source: Path, output: Path) -> Path:
+def _prepared_source(source: Path, output: Path, work: Path) -> Path:
     provenance = json.loads((output / "source.json").read_text())
     if sha256(source) != provenance["sha256"]:
         msg = "source EPUB differs from prepared source"
         raise ValueError(msg)
-    source = output / "corrected-source.epub"
+    source = work / "corrected-source.epub"
     if sha256(source) != provenance["corrected_sha256"]:
         message = "corrected source EPUB differs from prepared source"
         raise ValueError(message)
     return source
 
 
-def publish(source: Path, output: Path) -> None:
+def publish(source: Path, output: Path, work: Path, final: Path) -> None:
     """Materialize original source ranges and publish measured sentence audio."""
-    source = _prepared_source(source, output)
-    blocks = {(b.spine_index, b.block_index): b for b in extract_blocks(source)}
+    source = _prepared_source(source, output, work)
+    blocks = {(b.spine_index, b.block_index): b for b in _narration_blocks(source)}
     records = load_records(output)
     identities = [
         (r["source"]["spine_index"], r["source"]["block_index"]) for r in records
@@ -212,7 +230,6 @@ def publish(source: Path, output: Path) -> None:
             msg = "incomplete sentence coverage"
             raise ValueError(msg)
     edits, timings, audio = {}, [], {}
-    work = output / "work"
     work.mkdir(exist_ok=True)
     with ZipFile(source) as archive:
         opf = next(name for name in archive.namelist() if name.endswith(".opf"))
@@ -265,32 +282,37 @@ def publish(source: Path, output: Path) -> None:
                 )
     overlaid = work / "overlaid.epub"
     publish_media_overlays(targeted, overlaid, timings, audio)
-    repair(overlaid, output / "final.epub", "tts")
+    final.parent.mkdir(parents=True, exist_ok=True)
+    repair(overlaid, final, "tts")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("step", choices=("prepare", "synthesize", "publish"))
-    parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument(
+        "--output", type=Path, default=Path("data/silver/issue-17/thang-long-noi-gian")
+    )
+    parser.add_argument(
+        "--work", type=Path, default=Path("data/work/issue-17/thang-long-noi-gian")
+    )
+    parser.add_argument(
+        "--final", type=Path, default=Path("data/gold/thang-long-noi-gian.epub")
+    )
     parser.add_argument("--source", type=Path)
-    parser.add_argument("--model", type=Path)
-    parser.add_argument("--voice", type=Path)
     parser.add_argument("--concurrency", type=int, default=1)
     args = parser.parse_args()
     if args.concurrency <= 0:
         parser.error("--concurrency must be positive")
     logging.basicConfig(level=logging.INFO)
     if args.step == "synthesize":
-        if not args.model or not args.voice:
-            parser.error("synthesize requires --model and --voice")
-        synthesize(args.output, args.model, args.voice, args.concurrency)
+        synthesize(args.output, args.work, args.concurrency)
     else:
         if not args.source:
             parser.error("prepare/publish require --source")
         if args.step == "prepare":
-            prepare(args.source, args.output)
+            prepare(args.source, args.output, args.work)
         else:
-            publish(args.source, args.output)
+            publish(args.source, args.output, args.work, args.final)
 
 
 if __name__ == "__main__":

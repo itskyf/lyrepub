@@ -39,9 +39,13 @@ select = [
   "UP",  # pyupgrade
   "W",  # pycodestyle
 ]
+ignore = ["S603"]
 
 [lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004"]
+
+[lint.flake8-tidy-imports]
+banned-module-level-imports = ["numpy", "soundfile", "zapros", "vieneu_utils"]
 
 [lint.pydocstyle]
 convention = "google"
