@@ -2,7 +2,8 @@
 # /// script
 # requires-python = ">=3.13,<3.14"
 # dependencies = [
-#   "defusedxml>=0.7.1,<0.8", "fast-ebook>=0.2.0,<0.3", "numpy", "soundfile",
+#   "defusedxml>=0.7.1,<0.8", "fast-ebook>=0.2.0,<0.3",
+#   "numpy>=2.5.3,<3", "soundfile>=0.14.0,<1",
 #   "vieneu==3.8.3", "sea-g2p==0.10.0", "wtpsplit==2.2.2",
 #   "transformers[torch]==5.17.0", "zapros[pyreqwest]==0.19.0",
 # ]
@@ -25,13 +26,13 @@ from zipfile import ZipFile
 from defusedxml import ElementTree
 
 from lyrepub.audio import ogg_duration
-from lyrepub.epub_text import materialize_sentence_targets
+from lyrepub.epub_text import extract_blocks, materialize_sentence_targets
 from lyrepub.media_overlays import Timing, publish_media_overlays
 from lyrepub.segmentation import segment_sentences
-from lyrepub.tts_text import join_sentence_boundary, normalize_slash_enumeration
+from lyrepub.tts_text import normalize_slash_enumeration
 from scripts.publication import (
     correct_tts_source,
-    narration_blocks,
+    join_sentence_boundary,
     publication_metadata,
     repair,
 )
@@ -64,34 +65,34 @@ def prepare(source: Path, output: Path, work: Path) -> None:
     corrected = work / "corrected-source.epub"
     correct_tts_source(source, corrected)
     records = []
-    bronze_blocks = [
-        block
-        for block in narration_blocks(source)
-        if (block.href, block.text)
-        not in {("Text/1.html", "V"), ("Text/12.html", '"P')}
-    ]
-    for original, block in zip(bronze_blocks, narration_blocks(corrected), strict=True):
-        expected_text = (
-            original.text.replace('"P hú', '"Phú', 1)
-            if original.href == "Text/12.html"
-            else original.text
-        )
-        if original.href != block.href or expected_text != block.text:
-            message = "final source differs beyond reviewed corrections"
-            raise ValueError(message)
+    bronze_blocks = iter(extract_blocks(source))
+    original = next(bronze_blocks, None)
+    for block in extract_blocks(corrected):
+        while original is not None and (
+            original.href != block.href
+            or (
+                original.text.replace('"P hú', '"Phú', 1)
+                if original.href == "Text/12.html"
+                else original.text
+            )
+            != block.text
+        ):
+            original = next(bronze_blocks, None)
+        if original is None:
+            msg = "corrected source block has no bronze identity"
+            raise ValueError(msg)
         location = asdict(block)
         location.pop("text")
-        manual = MANUAL_NORMALIZATIONS.get((block.spine_index, block.block_index))
+        bronze_identity = (original.spine_index, original.block_index)
+        manual = MANUAL_NORMALIZATIONS.get(bronze_identity)
         treated = normalize_slash_enumeration(block.text)
         authored = segment_sentences(block.text)
         join = {(17, 24): (6, 7), (23, 37): (1, 2), (23, 172): (1, 2)}.get(
-            (block.spine_index, block.block_index)
+            bronze_identity
         )
         if join:
             left, right = join
-            expected = {(17, 24): ")", (23, 37): "-", (23, 172): '"'}[
-                block.spine_index, block.block_index
-            ]
+            expected = {(17, 24): ")", (23, 37): "-", (23, 172): '"'}[bronze_identity]
             join_sentence_boundary(block.text, authored, left, right, expected)
         try:
             sentences = prepare_sentences(block.text, treated, authored, manual)
@@ -130,13 +131,13 @@ def prepare(source: Path, output: Path, work: Path) -> None:
                 f"-> {manual['tts_text']}"
             )
         records.append(record)
+        original = next(bronze_blocks, None)
     save_records(output, records)
     (output / "source.json").write_text(
         json.dumps(
             {
                 "filename": source.name,
                 "sha256": sha256(source),
-                "corrected_sha256": sha256(corrected),
             },
             indent=2,
         )
@@ -163,17 +164,16 @@ def _prepared_source(source: Path, output: Path, work: Path) -> Path:
     if sha256(source) != provenance["sha256"]:
         msg = "source EPUB differs from prepared source"
         raise ValueError(msg)
-    source = work / "corrected-source.epub"
-    if sha256(source) != provenance["corrected_sha256"]:
-        message = "corrected source EPUB differs from prepared source"
-        raise ValueError(message)
-    return source
+    work.mkdir(parents=True, exist_ok=True)
+    corrected = work / "corrected-source.epub"
+    correct_tts_source(source, corrected)
+    return corrected
 
 
 def publish(source: Path, output: Path, work: Path, final: Path) -> None:
     """Materialize original source ranges and publish measured sentence audio."""
     source = _prepared_source(source, output, work)
-    blocks = {(b.spine_index, b.block_index): b for b in narration_blocks(source)}
+    blocks = {(b.spine_index, b.block_index): b for b in extract_blocks(source)}
     records = load_records(output)
     identities = [
         (r["source"]["spine_index"], r["source"]["block_index"]) for r in records

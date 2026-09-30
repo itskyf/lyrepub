@@ -27,24 +27,6 @@ def normalize_slash_enumeration(text: str) -> str:
     return text
 
 
-def join_sentence_boundary(
-    source: str, sentences: list[str], left: int, right: int, punctuation: str
-) -> None:
-    """Join a reviewed punctuation split without altering the authored span."""
-    boundary = left if punctuation == "-" else right
-    if sentences[boundary] != punctuation:
-        message = "reviewed punctuation target differs from source"
-        raise ValueError(message)
-    cursor = 0
-    for previous in sentences[:left]:
-        cursor = source.index(previous, cursor) + len(previous)
-    start = source.index(sentences[left], cursor)
-    end = source.index(sentences[right], start + len(sentences[left])) + len(
-        sentences[right]
-    )
-    sentences[left : right + 1] = [source[start:end]]
-
-
 def map_sentence_inputs(
     source: str,
     text_input: str,

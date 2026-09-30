@@ -3,17 +3,22 @@
 import hashlib
 import json
 from pathlib import Path
-from xml.etree.ElementTree import tostring
+from xml.etree.ElementTree import SubElement, tostring
 from zipfile import ZipFile
 
 import pytest
 from defusedxml import ElementTree
 from test_media_overlays import _source
 
-from lyrepub.epub_text import extract_blocks
-from lyrepub.tts_text import join_sentence_boundary, map_sentence_inputs
+from lyrepub.tts_text import map_sentence_inputs
 from scripts import publication
-from scripts.publication import NS, XHTML, repair, verify_alignment
+from scripts.publication import (
+    NS,
+    XHTML,
+    join_sentence_boundary,
+    repair,
+    verify_alignment,
+)
 
 
 def sha256(path: Path) -> str:
@@ -92,46 +97,6 @@ def test_ncx_navigation_keeps_nested_order_labels_and_targets(tmp_path: Path) ->
         section.findtext("x:a", namespaces=NS),
         section.find("x:a", NS).get("href"),
     ) == ("Section A", "one.xhtml#second")
-
-
-def test_distribution_boilerplate_excluded_without_renumbering(
-    tmp_path: Path,
-) -> None:
-    source = tmp_path / "source.epub"
-    _tts_source(source)
-    with ZipFile(source) as archive:
-        files = {name: archive.read(name) for name in archive.namelist()}
-    files["OEBPS/two.xhtml"] = (
-        f'<html xmlns="{XHTML}"><head><title>Chapter</title></head><body>'
-        '<div class="header">Thăng Long Nổi Giận</div>'
-        '<div class="author">Hoàng Quốc Hải</div>'
-        '<author><div class="author">www.dtv-ebook.com</div></author>'
-        "<h4>Chương 1</h4><p>Subsequent narration.</p></body></html>"
-    ).encode()
-    with ZipFile(source, "w") as archive:
-        for name, content in files.items():
-            archive.writestr(name, content)
-    original = next(
-        block
-        for block in extract_blocks(source)
-        if block.text == "Subsequent narration."
-    )
-    narrated = publication.narration_blocks(source)
-    assert all(block.text not in publication.DISTRIBUTION_HEADER for block in narrated)
-    selected = next(block for block in narrated if block.text == original.text)
-    assert (selected.spine_index, selected.block_index) == (
-        original.spine_index,
-        original.block_index,
-    )
-    assert selected.element_path == original.element_path
-    final = tmp_path / "final.epub"
-    repair(source, final, "tts")
-    with ZipFile(final) as archive:
-        chapter = archive.read("OEBPS/two.xhtml")
-        assert all(
-            text.encode() not in chapter for text in publication.DISTRIBUTION_HEADER
-        )
-        assert b"Subsequent narration." in chapter
 
 
 def test_repair_preserves_ids_inline_content_and_note_text(tmp_path: Path) -> None:
@@ -262,6 +227,88 @@ def test_alignment_opus_keeps_exact_smil_timings(
         publication.package_alignment(source, output / "final.epub", output / "work")
 
 
+def test_alignment_opening_targets_visible_credit_before_biography(
+    tmp_path: Path,
+) -> None:
+    source, output = tmp_path / "source.epub", tmp_path / "final.epub"
+    files = _source(source)
+    package = ElementTree.fromstring(files["OEBPS/package.opf"])
+    manifest = package.find("p:manifest", NS)
+    SubElement(
+        manifest,
+        f"{{{publication.OPF}}}item",
+        {
+            "id": "cover",
+            "href": "Text/cover.xhtml",
+            "media-type": "application/xhtml+xml",
+        },
+    )
+    SubElement(
+        package.find("p:metadata", NS),
+        f"{{{publication.OPF}}}meta",
+        {
+            "property": "media:duration",
+            "refines": "#Text-section_11.html_overlay",
+        },
+    ).text = "00:01:31.88"
+    files["OEBPS/package.opf"] = tostring(package)
+    files["OEBPS/Text/cover.xhtml"] = (
+        f'<html xmlns="{XHTML}"><head><title>Cover</title></head>'
+        "<body><div>Visible cover</div></body></html>"
+    ).encode()
+    files["OEBPS/MediaOverlays/section_11.smil"] = (
+        '<smil xmlns="http://www.w3.org/ns/SMIL"><body><seq>'
+        + "".join(
+            f'<par id="Text-section_11.html-{key}">'
+            f'<audio src="../Audio/00001-00001.opus" clipBegin="{begin}s" '
+            f'clipEnd="{end}s"/></par>'
+            for key, begin, end in (
+                ("s0-before0", "0.000", "7.960"),
+                ("s0", "7.960", "9.080"),
+                ("s1", "9.080", "10.560"),
+                ("s2", "10.560", "26.100"),
+                ("s3", "26.100", "29.920"),
+            )
+        )
+        + "</seq></body></smil>"
+    ).encode()
+    with ZipFile(source, "w") as archive:
+        for name, content in files.items():
+            archive.writestr(name, content)
+    repair(source, output, "alignment")
+    with ZipFile(output) as archive:
+        cover = ElementTree.fromstring(archive.read("OEBPS/Text/cover.xhtml"))
+        credit = cover.find("x:body/x:p[@id='lyrepub-opening-credit']", NS)
+        assert credit.text == publication.OPENING_CREDIT
+        cover_smil = ElementTree.fromstring(
+            archive.read("OEBPS/MediaOverlays/cover.smil")
+        )
+        cover_par = cover_smil.find(".//s:par", NS)
+        assert (
+            cover_par.find("s:text", NS)
+            .get("src")
+            .endswith("cover.xhtml#lyrepub-opening-credit")
+        )
+        assert cover_par.find("s:audio", NS).get("clipEnd") == "20.900s"
+        biography = ElementTree.fromstring(
+            archive.read("OEBPS/MediaOverlays/section_11.smil")
+        )
+        pars = biography.findall(".//s:par", NS)
+        assert [
+            (p.get("id"), p.find("s:audio", NS).get("clipBegin")) for p in pars
+        ] == [
+            ("Text-section_11.html-s0", "20.900s"),
+            ("Text-section_11.html-s1", "21.400s"),
+            ("Text-section_11.html-s2", "22.400s"),
+            ("Text-section_11.html-s3", "26.100s"),
+        ]
+        package = ElementTree.fromstring(archive.read("OEBPS/package.opf"))
+        assert (
+            package.find("p:manifest/p:item[@id='cover']", NS).get("media-overlay")
+            == "lyrepub-cover-overlay"
+        )
+
+
 def test_alignment_report_rejects_changed_smil_timing(tmp_path: Path) -> None:
     frozen, regenerated, epub = (
         tmp_path / "frozen.json",
@@ -358,73 +405,77 @@ def test_reviewed_boundary_joins_preserve_authored_offsets(
     assert text[offsets[0] : offsets[1]] == joined
 
 
-def test_reviewed_initial_corrections_preserve_bronze_source(
-    tmp_path: Path,
-) -> None:
+def _chapter(first: str, initial: str, following: str) -> str:
+    return (
+        f'<html xmlns="{XHTML}"><head><title>Chapter</title></head><body>'
+        '<div class="header">Thăng Long Nổi Giận</div>'
+        '<div class="author">Hoàng Quốc Hải</div>'
+        '<author><div class="author">www.dtv-ebook.com</div></author>'
+        f"<h4>Chương</h4><p>{first}</p><p>{initial}</p><p>{following}</p>"
+        "</body></html>"
+    )
+
+
+def test_source_repair_removes_header_and_repeated_initials(tmp_path: Path) -> None:
     source, output = tmp_path / "source.epub", tmp_path / "corrected.epub"
-    chapter_one = (
-        f'<html xmlns="{XHTML}"><head><title>One</title></head><body>'
-        "<p>Vừa bước vào tới cửa cung Thánh từ, vua đã sụp lạy:</p>"
-        "<p>V</p><p>- Trình phụ hoàng.</p></body></html>"
-    )
-    chapter_twelve = (
-        f'<html xmlns="{XHTML}"><head><title>Twelve</title></head><body>'
-        '<p>"P hú quốc Cường binh sách" của Trần Hưng Đạo.</p>'
-        '<p>"P</p><p>Lệnh vua ban khắp nước.</p></body></html>'
-    )
     with ZipFile(source, "w") as archive:
-        archive.writestr("OEBPS/Text/1.html", chapter_one)
-        archive.writestr("OEBPS/Text/12.html", chapter_twelve)
+        archive.writestr(
+            "OEBPS/Text/1.html",
+            _chapter("Vừa bước vào tới cửa cung Thánh từ.", "V", "Tiếp theo."),
+        )
+        archive.writestr(
+            "OEBPS/Text/12.html",
+            _chapter('"P hú quốc Cường binh sách".', '"P', "Lệnh vua ban."),
+        )
+        archive.writestr(
+            "OEBPS/Text/13.html",
+            _chapter("Sau trận đánh.", "V", "Vẫn còn quân."),
+        )
     digest = sha256(source)
     publication.correct_tts_source(source, output)
     assert sha256(source) == digest
     with ZipFile(output) as archive:
-        one = ElementTree.fromstring(archive.read("OEBPS/Text/1.html"))
-        twelve = ElementTree.fromstring(archive.read("OEBPS/Text/12.html"))
-        assert [p.text for p in one.findall("x:body/x:p", NS)] == [
-            "Vừa bước vào tới cửa cung Thánh từ, vua đã sụp lạy:",
-            "- Trình phụ hoàng.",
-        ]
-        assert [p.text for p in twelve.findall("x:body/x:p", NS)] == [
-            '"Phú quốc Cường binh sách" của Trần Hưng Đạo.',
-            "Lệnh vua ban khắp nước.",
-        ]
+        for name, expected in (
+            ("1.html", ["Vừa bước vào tới cửa cung Thánh từ.", "Tiếp theo."]),
+            ("12.html", ['"Phú quốc Cường binh sách".', "Lệnh vua ban."]),
+            ("13.html", ["Sau trận đánh.", "V", "Vẫn còn quân."]),
+        ):
+            body = ElementTree.fromstring(archive.read(f"OEBPS/Text/{name}")).find(
+                "x:body", NS
+            )
+            assert [p.text for p in body.findall("x:p", NS)] == expected
+            assert not any(
+                text in " ".join(body.itertext())
+                for text in publication.DISTRIBUTION_HEADER
+            )
 
 
 @pytest.mark.parametrize(
-    "defect", ["missing-resource", "missing-paragraph", "ambiguous", "wrong"]
+    "defect",
+    ["missing-resource", "missing-paragraph", "missing-correction", "ambiguous"],
 )
-def test_reviewed_initial_correction_fails_closed(tmp_path: Path, defect: str) -> None:
+def test_source_repair_fails_closed(tmp_path: Path, defect: str) -> None:
     source, output = tmp_path / "source.epub", tmp_path / "corrected.epub"
-    first = [
-        "Vừa bước vào tới cửa cung Thánh từ, vua đã sụp lạy:",
-        "V",
-        "- Trình phụ hoàng.",
-    ]
-    second = [
-        '"P hú quốc Cường binh sách" của Trần Hưng Đạo.',
-        '"P',
-        "Lệnh vua ban khắp nước.",
-    ]
-    if defect == "missing-paragraph":
-        second.pop(1)
-    elif defect == "ambiguous":
-        second.extend(second.copy())
-    else:
-        second[2] = "Unrelated narration."
     with ZipFile(source, "w") as archive:
-        for name, paragraphs in (
-            ("OEBPS/Text/1.html", first),
-            ("OEBPS/Text/12.html", second),
-        ):
-            if defect == "missing-resource" and name.endswith("12.html"):
-                continue
+        if defect == "ambiguous":
             archive.writestr(
-                name,
-                f'<html xmlns="{XHTML}"><body>'
-                + "".join(f"<p>{p}</p>" for p in paragraphs)
-                + "</body></html>",
+                "OEBPS/Text/1.html",
+                _chapter("Vừa bước vào.", "<span>V</span>", "Tiếp theo."),
             )
-    with pytest.raises(ValueError, match="reviewed duplicate-initial"):
+        elif defect == "missing-paragraph":
+            archive.writestr(
+                "OEBPS/Text/1.html",
+                _chapter("Vừa bước vào.", "V", "Tiếp theo.").replace(
+                    "<p>Tiếp theo.</p>", ""
+                ),
+            )
+        if defect != "missing-resource":
+            first = '"P hú quốc Cường binh sách".'
+            if defect == "missing-correction":
+                first = '"Phú quốc Cường binh sách".'
+            archive.writestr(
+                "OEBPS/Text/12.html", _chapter(first, '"P', "Lệnh vua ban.")
+            )
+    with pytest.raises(ValueError, match=r"ambiguous|missing"):
         publication.correct_tts_source(source, output)
     assert not output.exists()

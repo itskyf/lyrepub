@@ -13,7 +13,6 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 from defusedxml import ElementTree
 
 from lyrepub.audio import encode_opus
-from lyrepub.epub_text import Block, extract_blocks
 
 OPF = "http://www.idpf.org/2007/opf"
 XHTML = "http://www.w3.org/1999/xhtml"
@@ -26,37 +25,34 @@ DISTRIBUTION_HEADER = (
     "Hoàng Quốc Hải",
     "www.dtv-ebook.com",
 )
+CHAPTER_OPENING_LENGTH = 4  # heading, first paragraph, candidate, next paragraph
+OPENING_CREDIT = (
+    "Tác phẩm Đêm hội Long Trì - tiểu thuyết - tác giả Nguyễn Huy Tưởng - "
+    "NXB Kim Đồng ấn hành - người đọc Ngọc Hân"
+)
 
 
-def narration_blocks(source: Path) -> list[Block]:
-    """Exclude the confirmed chapter header without renumbering source blocks."""
-    boilerplate = set(
-        zip(DISTRIBUTION_HEADER, ((1, 0), (1, 1), (1, 2, 0)), strict=True)
+def join_sentence_boundary(
+    source: str, sentences: list[str], left: int, right: int, punctuation: str
+) -> None:
+    """Join a reviewed #17 punctuation split without changing authored text."""
+    boundary = left if punctuation == "-" else right
+    if sentences[boundary] != punctuation:
+        msg = "reviewed punctuation target differs from source"
+        raise ValueError(msg)
+    cursor = 0
+    for previous in sentences[:left]:
+        cursor = source.index(previous, cursor) + len(previous)
+    start = source.index(sentences[left], cursor)
+    end = source.index(sentences[right], start + len(sentences[left])) + len(
+        sentences[right]
     )
-    return [
-        block
-        for block in extract_blocks(source)
-        if (block.text, block.element_path) not in boilerplate
-    ]
+    sentences[left : right + 1] = [source[start:end]]
 
 
 register_namespace("", XHTML)
 register_namespace("epub", EPUB)
 register_namespace("dc", DC)
-
-# Exact local context for the two reviewed duplicate-initial corrections.
-REVIEWED_CONTEXT = {
-    "OEBPS/Text/1.html": (
-        "Vừa bước vào tới cửa cung Thánh từ",
-        "V",
-        "- Trình phụ hoàng.",
-    ),
-    "OEBPS/Text/12.html": (
-        '"P hú quốc Cường binh sách"',
-        '"P',
-        "Lệnh vua ban khắp nước",
-    ),
-}
 
 
 def write_epub(
@@ -240,6 +236,15 @@ def _xhtml(root: Element, name: str, title: str, pathway: str) -> None:
     body, head = root.find("x:body", NS), root.find("x:head", NS)
     if pathway == "alignment":
         body.attrib.pop("section", None)
+        if name == "OEBPS/Text/cover.xhtml":
+            SubElement(
+                head,
+                f"{{{XHTML}}}link",
+                {"rel": "stylesheet", "href": "../Styles/storyteller-readaloud.css"},
+            )
+            SubElement(
+                body, f"{{{XHTML}}}p", {"id": "lyrepub-opening-credit"}
+            ).text = OPENING_CREDIT
     heading_tag = "h4" if pathway == "tts" else "h2"
     heading = next(
         (e for e in body.iter() if e.tag == f"{{{XHTML}}}{heading_tag}"), None
@@ -258,8 +263,6 @@ def _xhtml(root: Element, name: str, title: str, pathway: str) -> None:
     if heading is not None:
         heading.tag = f"{{{XHTML}}}h1"
         heading.set("class", (heading.get("class", "") + " lyrepub-heading").strip())
-    if pathway == "tts":
-        _remove_distribution_boilerplate(body)
     for link in list(head.findall("x:link", NS)):
         if pathway == "alignment" and link.get("href") == "../Styles/book-style-3.css":
             head.remove(link)
@@ -270,9 +273,9 @@ def _xhtml(root: Element, name: str, title: str, pathway: str) -> None:
         _notes(root, body)
 
 
-def _remove_distribution_boilerplate(body: Element) -> None:
+def _remove_distribution_boilerplate(body: Element) -> bool:
     if len(body) < len(DISTRIBUTION_HEADER):
-        return
+        return False
     title, author, distributor = body[: len(DISTRIBUTION_HEADER)]
     if (
         title.tag == f"{{{XHTML}}}div"
@@ -289,6 +292,8 @@ def _remove_distribution_boilerplate(body: Element) -> None:
     ):
         for element in (title, author, distributor):
             body.remove(element)
+        return True
+    return False
 
 
 def _alignment_images(root: Element, title: str, author: str) -> None:
@@ -328,6 +333,97 @@ def _alignment_images(root: Element, title: str, author: str) -> None:
             svg.set("aria-label", f"{title} — {author}")
 
 
+def _alignment_opening(
+    package: Element, archive: ZipFile, edits: dict[str, bytes]
+) -> None:
+    """Move the spoken credit to the visible cover before biography playback."""
+    # MOSS and adjacent silence locate this boundary; Thorium playback was checked.
+    onset, name_onset, year_onset = "20.900s", "21.400s", "22.400s"
+    manifest = package.find("p:manifest", NS)
+    cover = manifest.find("p:item[@href='Text/cover.xhtml']", NS)
+    if cover is None or "OEBPS/Text/cover.xhtml" not in archive.namelist():
+        msg = "alignment cover resource missing"
+        raise ValueError(msg)
+    path = "OEBPS/MediaOverlays/section_11.smil"
+    smil = ElementTree.fromstring(archive.read(path))
+    seq = smil.find("s:body/s:seq", NS)
+    pars = seq.findall("s:par", NS)
+    expected = (
+        ("Text-section_11.html-s0-before0", "0.000s", "7.960s"),
+        ("Text-section_11.html-s0", "7.960s", "9.080s"),
+        ("Text-section_11.html-s1", "9.080s", "10.560s"),
+        ("Text-section_11.html-s2", "10.560s", "26.100s"),
+    )
+    if len(pars) < len(expected) or any(
+        (
+            par.get("id"),
+            par.find("s:audio", NS).get("clipBegin"),
+            par.find("s:audio", NS).get("clipEnd"),
+        )
+        != row
+        for par, row in zip(pars, expected, strict=False)
+    ):
+        msg = "alignment opening SMIL differs from reviewed source"
+        raise ValueError(msg)
+    audio = pars[0].find("s:audio", NS)
+    seq.remove(pars[0])
+    for par, begin, end in zip(
+        pars[1:4],
+        (onset, name_onset, year_onset),
+        (name_onset, year_onset, "26.100s"),
+        strict=True,
+    ):
+        par_audio = par.find("s:audio", NS)
+        par_audio.set("clipBegin", begin)
+        par_audio.set("clipEnd", end)
+    edits[path] = tostring(smil, encoding="utf-8", xml_declaration=True)
+
+    cover_smil = Element(f"{{{SMIL}}}smil", {"version": "3.0"})
+    cover_seq = SubElement(
+        SubElement(cover_smil, f"{{{SMIL}}}body"),
+        f"{{{SMIL}}}seq",
+        {"id": "lyrepub-cover-overlay", f"{{{EPUB}}}textref": "../Text/cover.xhtml"},
+    )
+    credit = SubElement(cover_seq, f"{{{SMIL}}}par", {"id": "lyrepub-opening-credit"})
+    SubElement(
+        credit,
+        f"{{{SMIL}}}text",
+        {"src": "../Text/cover.xhtml#lyrepub-opening-credit"},
+    )
+    SubElement(
+        credit,
+        f"{{{SMIL}}}audio",
+        {"src": audio.get("src"), "clipBegin": "0.000s", "clipEnd": onset},
+    )
+    edits["OEBPS/MediaOverlays/cover.smil"] = tostring(
+        cover_smil, encoding="utf-8", xml_declaration=True
+    )
+    cover.set("media-overlay", "lyrepub-cover-overlay")
+    SubElement(
+        manifest,
+        f"{{{OPF}}}item",
+        {
+            "id": "lyrepub-cover-overlay",
+            "href": "MediaOverlays/cover.smil",
+            "media-type": "application/smil+xml",
+        },
+    )
+    metadata = package.find("p:metadata", NS)
+    duration = metadata.find(
+        "p:meta[@property='media:duration'][@refines='#Text-section_11.html_overlay']",
+        NS,
+    )
+    if duration is None or duration.text != "00:01:31.88":
+        msg = "alignment opening overlay duration differs from reviewed source"
+        raise ValueError(msg)
+    duration.text = "00:01:10.98"
+    SubElement(
+        metadata,
+        f"{{{OPF}}}meta",
+        {"property": "media:duration", "refines": "#lyrepub-cover-overlay"},
+    ).text = "00:00:20.90"
+
+
 def repair(source: Path, output: Path, pathway: str) -> None:
     """Apply source repairs and reviewed image alternatives to the final copy."""
     edits = {}
@@ -364,6 +460,8 @@ def repair(source: Path, output: Path, pathway: str) -> None:
         publication_metadata(package, pathway)
         if pathway == "tts":
             _tts_navigation(package, archive, edits, directory)
+        elif "OEBPS/MediaOverlays/section_11.smil" in archive.namelist():
+            _alignment_opening(package, archive, edits)
         for name in archive.namelist():
             if name in removed:
                 continue
@@ -400,41 +498,63 @@ def repair(source: Path, output: Path, pathway: str) -> None:
 
 
 def correct_tts_source(source: Path, output: Path) -> None:
-    """Correct the two reviewed duplicate initials in the final source copy."""
+    """Remove chapter distribution text and duplicated opening fragments."""
     edits = {}
+    corrected_phu = 0
     with ZipFile(source) as archive:
-        for name, (before, duplicate, after) in REVIEWED_CONTEXT.items():
-            if name not in archive.namelist():
-                message = f"reviewed duplicate-initial resource missing: {name}"
-                raise ValueError(message)
+        for name in archive.namelist():
+            if not name.startswith("OEBPS/Text/") or not name.endswith(".html"):
+                continue
+            if not Path(name).stem.isdecimal():
+                continue
             root = ElementTree.fromstring(archive.read(name))
             body = root.find("x:body", NS)
             children = list(body) if body is not None else []
-            targets = [
-                index
-                for index in range(1, len(children) - 1)
-                if all(
-                    element.tag == f"{{{XHTML}}}p"
-                    and not element.attrib
-                    and not len(element)
-                    for element in children[index - 1 : index + 2]
-                )
-                and (children[index - 1].text or "").startswith(before)
-                and children[index].text == duplicate
-                and (children[index + 1].text or "").startswith(after)
-            ]
-            if len(targets) != 1:
-                message = (
-                    f"reviewed duplicate-initial target missing or ambiguous: {name}"
-                )
-                raise ValueError(message)
-            index = targets[0]
-            if duplicate == '"P':
-                children[index - 1].text = children[index - 1].text.replace(
-                    '"P hú', '"Phú', 1
-                )
-            body.remove(children[index])
+            if (
+                len(children) < len(DISTRIBUTION_HEADER) + CHAPTER_OPENING_LENGTH
+                or children[3].tag != f"{{{XHTML}}}h4"
+            ):
+                msg = f"chapter opening structure missing or changed: {name}"
+                raise ValueError(msg)
+            if not _remove_distribution_boilerplate(body):
+                msg = f"chapter distribution header missing or changed: {name}"
+                raise ValueError(msg)
+            children = list(body)
+            if (
+                len(children) < CHAPTER_OPENING_LENGTH
+                or children[1].tag != f"{{{XHTML}}}p"
+            ):
+                msg = f"chapter opening structure changed: {name}"
+                raise ValueError(msg)
+            first, candidate, following = children[1:4]
+            initial = "".join(candidate.itertext()).strip()
+            if (
+                candidate.tag == f"{{{XHTML}}}p"
+                and len(initial.lstrip('"')) == 1
+                and initial[-1:].isalpha()
+                and "".join(first.itertext()).startswith(initial)
+            ):
+                if (
+                    first.attrib
+                    or len(first)
+                    or candidate.attrib
+                    or len(candidate)
+                    or following.tag != f"{{{XHTML}}}p"
+                    or not "".join(following.itertext()).strip()
+                ):
+                    msg = f"ambiguous detached opening fragment: {name}"
+                    raise ValueError(msg)
+                body.remove(candidate)
+            if name == "OEBPS/Text/12.html":
+                if (first.text or "").count('"P hú') != 1:
+                    msg = "reviewed Phú correction missing or ambiguous: Text/12.html"
+                    raise ValueError(msg)
+                first.text = first.text.replace('"P hú', '"Phú', 1)
+                corrected_phu += 1
             edits[name] = tostring(root, encoding="utf-8", xml_declaration=True)
+    if corrected_phu != 1:
+        msg = "reviewed Phú correction resource missing: Text/12.html"
+        raise ValueError(msg)
     write_epub(source, output, edits, set())
 
 

@@ -2,7 +2,8 @@
 # /// script
 # requires-python = ">=3.13,<3.14"
 # dependencies = [
-#   "defusedxml>=0.7.1,<0.8", "fast-ebook>=0.2.0,<0.3", "numpy", "soundfile",
+#   "defusedxml>=0.7.1,<0.8", "fast-ebook>=0.2.0,<0.3",
+#   "numpy>=2.5.3,<3", "soundfile>=0.14.0,<1",
 #   "vieneu==3.8.3", "sea-g2p==0.10.0", "wtpsplit==2.2.2",
 #   "transformers[torch]==5.17.0", "zapros[pyreqwest]==0.19.0",
 # ]

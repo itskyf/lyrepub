@@ -65,35 +65,28 @@ HTTP errors, non-WAV responses, invalid PCM, and preprocessing failures stop the
 Completed blocks are reused from their saved sentence records and packaged Opus clips.
 No Python inference fallback is provided.
 Alignment consumes retained emissions rather than rerunning inference, and verifies the frozen report spans and four recorded manual timing boundaries.
-The regenerated report matches the frozen report, and all 3,382 SMIL timing and text-reference tuples remain unchanged through Opus packaging.
+The regenerated report matches the frozen report. Opus packaging preserves its SMIL timings before the #17 opening-credit publication repair.
 
 ## Runtime and benchmark comparison
 
 The server comparison used the configured audio.cpp endpoint and the frozen source-derived sentence inputs. The endpoint configuration is recorded in `containers/audiocpp.json`; this publication pass does not persist container inspection output.
 The server comparison preserves all 118 frozen sentence inputs, frontend chunks, source mappings, and clip durations.
 Decoded Opus PCM matches for 117 sentences; `s5-b9` sentence 39 reproduces the previously reviewed full-run recording rather than the older isolated recording.
-A focused curl repeat produces the same raw PCM as the server benchmark and previous full run.
 The differing older isolated waveform is retained, so byte-identical reproduction of all frozen recordings is not claimed.
 `benchmark-comparison.json` records each sentence comparison.
 The reviewed full-book recording is checked separately from the frozen benchmark.
-The reviewed run completed 3,031 blocks and 10,341 sentence clips. Final publication excludes the 26 repeated three-block distribution headers and their 78 clips; the remaining 2,953 blocks and 10,263 clips use the retained sentence WAVs for Opus packaging without new inference.
-Of the 10,340 unchanged sentences, 10,337 regenerated WAV clips match the reviewed full run byte-for-byte.
-Three unchanged sentence waveforms differ: `s10-b4` sentence 1, `s14-b4` sentence 0, and `s21-b4` sentence 0.
-Their duration differences are 0.160, -0.240, and 0.000 seconds, respectively, and focused curl repeats reproduce all three server PCM results exactly.
-Their authored text, phonemes, seeds, sampling settings, checkpoint, voice assets, and Python frontend are identical to the earlier reviewed run.
-The [upstream runtime comparison](https://github.com/0xshug0/audio.cpp/compare/955c8725c611d511774e6be132aff6609163b2d2...f99bd1e1f393999a3ce8abf5029b1e1d9af1cfe1) contains shared sampler and prefill changes but no VieNeu model-source changes; the exact cause of the waveform differences is not established.
-The server execution path is retained, and no new audio-quality acceptance is inferred from these repeatability checks.
+The earlier full-book run and its comparison records remain separate #17 experimental artifacts. The final publication is rebuilt from the repaired source; no audio-quality acceptance is inferred from repeatability checks.
 
 ## Reviewed source repairs and accessibility
 
-The current TTS publication repair corrects the opening `"P hú` to `"Phú` in chapter 12 and removes its duplicate standalone `"P` paragraph.
-The chapter 1 standalone `V` duplicates the initial of the immediately preceding complete sentence beginning "Vừa bước vào tới cửa cung Thánh từ" and is removed without changing that sentence or the following dialogue.
-Further manual review found the same source defect pattern in additional chapters: a complete first paragraph is followed by a detached duplicate initial before the next paragraph. The two implemented corrections therefore do not yet cover the full source and require a source-wide, structure-based repair before #17 is complete.
-`data/work/issue-17/thang-long-noi-gian/corrected-source.epub` and its checksum make these final-publication changes explicit; source offsets refer to this corrected copy while inference seeds retain the original source block indices.
+The corrected TTS source removes the repeated DTV-Ebook chapter header and the detached duplicate opening fragment found in each chapter. Its separate chapter 12 correction changes `"P hú` to `"Phú`.
+`data/work/issue-17/thang-long-noi-gian/corrected-source.epub` is regenerated from Bronze when needed. Source offsets refer to this corrected copy, while inference seeds derive from the matching original bronze blocks.
+Deleting `data/work/` and publishing again from the acquired source and retained #17 Silver records produced the final TTS EPUB with 2,929 completed blocks and 10,239 Opus clips.
 These edits do not change bronze inputs or frozen benchmark evidence, and exact-text preservation is claimed only outside the reviewed corrections.
 The reviewed punctuation joins remain source-preserving sentence-boundary joins.
-The TTS inputs are 48 kHz mono 16-bit PCM WAV (768 kb/s uncompressed); all 10,263 retained sentence WAVs were checked. The seven alignment inputs are 44.1 kHz stereo MP3 at approximately 96 kb/s. Both publication paths encode from those inputs without a project-specified bitrate; FFmpeg/libopus uses its default target bitrate with VBR, and the project does not force resampling or channel conversion. No new audio-quality review is claimed.
+The TTS input is 48 kHz mono 16-bit PCM WAV (768 kb/s uncompressed). The seven alignment inputs are 44.1 kHz stereo MP3 at approximately 96 kb/s. Both publication paths encode from those inputs with libopus defaults, without a fixed bitrate or forced resampling or channel conversion. No new audio-quality review is claimed.
 Alignment title-attribute notes become linked footnotes with backlinks and their original text; duplicate title attributes are removed after materialization.
+The #17 alignment publication moves the spoken opening credit to visible cover text and starts biography targeting after it. MOSS placed the biography utterance near track time 20.86 seconds; a local silence boundary was near 20.92 seconds. Thorium playback of the exact Gold EPUB confirmed the credit and biography highlighting behavior, including that the dates do not highlight during the credit. No separate 0.1-second manual onset measurement was recorded. The frozen #15 report and aligned EPUB are unchanged.
 The reviewed back-cover transcription is ordinary visible text referenced by a short image alternative, rather than an oversized `alt` attribute.
 This transcription is absent from the audiobook, and no narration is added to the alignment pathway.
 Source-specific XHTML and stylesheet repairs are limited to their respective publications.
@@ -102,7 +95,7 @@ The alignment book also declares its image alternatives. Inspection of both fina
 Neither book declares `accessModeSufficient` while the human review needed to justify textual sufficiency remains incomplete.
 Automated results do not establish completed human accessibility review or accessibility conformance.
 
-## Automated validation and package inspection
+## Automated validation
 
 ```sh
 pixi run -e dev python -m pytest -q tests/test_publication.py \
@@ -110,33 +103,24 @@ pixi run -e dev python -m pytest -q tests/test_publication.py \
 pixi run -e dev python -m pytest -q
 hk check --pr
 
+mkdir --parents data/work/issue-17/validation
 for book in thang-long-noi-gian dem-hoi-long-tri; do
   podman compose run --rm --volume "$PWD/data:/data:ro,z" epubcheck \
     "/data/gold/$book.epub"
   podman compose run --rm --volume "$PWD/data:/data:z" ace \
     "/data/gold/$book.epub" \
-    --outdir "/data/silver/issue-17/validation/$book-ace" --force
+    --outdir "/data/work/issue-17/validation/$book-ace" --force
 done
 ```
 
 Normal pytest checks reusable source mapping, coverage, all three approved punctuation joins, fail-closed source corrections, nested navigation, Opus packaging, manifest/SMIL references, and frozen alignment timings using only declared project and dev dependencies.
-The focused suite passes 31 tests; the full suite passes 42 tests.
+The full declared dev suite passes 42 tests.
 `hk check --pr` passes. FFmpeg and ffprobe are resolved from the Pixi-managed `PATH`; Ruff retains S607 and ignores S603 for the reviewed shell-free subprocess pattern. Normal pytest imports reusable text mapping from `src/lyrepub`; the standalone TTS scripts import their PEP 723 runtime dependencies at module scope and were import-checked through their inline-uv commands.
 All 280 files in the retained frozen-evidence checksum inventory remain unchanged.
 Actual frontend and inference integration runs through the inline-uv benchmark and publication commands.
 Both final EPUBs pass Compose EPUBCheck with zero errors and warnings.
 Ace flags the omitted `accessModeSufficient` property, a SHOULD discovery property whose textual claim awaits human review.
-Package inspection checks ZIP sizes and duplicate entries, manifest resources, local references, reachable assets, audio references, and overlay duration totals. The current package-inspection results were produced by a local one-off diagnostic; the repository does not yet provide a reproducible inspection command for this check.
-Eight unused alignment source resources, including three byte-identical image variants, are removed from the final package while its referenced cover, portrait, transcription, and seven audio tracks remain available.
-The alignment package has 38 resources, 35 manifest entries, seven referenced Opus tracks, and 3,382 clips totaling 16,446.44 seconds of overlay intervals.
-It contains 167,904,135 file bytes, with 167,899,163 compressed and 170,887,746 uncompressed resource bytes.
-Its encoded audio tracks total 16,446.603229 seconds, and package inspection finds no missing manifest resources, missing local references, duplicate entries, byte-identical resources, unreferenced audio, or unreachable manifest resources.
-The TTS package has 10,321 file resources, 10,318 manifest entries, 10,263 referenced Opus clips, and 26 SMIL documents.
-It contains 409,919,131 file bytes, with 408,271,749 compressed and 411,875,595 uncompressed resource bytes.
-Its encoded audio resources total 43,734.2895 seconds; rounded overlay intervals total 43,729.158 seconds.
-Its three original ZIP directory markers are listed separately from file resources.
-It has no missing references or manifest resources, unmanifested files, duplicate entries, byte-identical file resources, unreferenced audio, or unreachable manifest resources.
-Final package inventories are retained in `data/silver/issue-17/validation/`.
+The alignment package removes eight unused source resources while retaining its referenced cover, portrait, transcription, and seven audio tracks. Its source SMIL timings are verified against the frozen report before the #17 opening repair.
 
 ## Reader validation
 
@@ -171,6 +155,5 @@ playwright-cli -s=readest requests
 ```
 
 Earlier Readest imports of both publications transferred successfully but remained at "Loading…"; a bronze source control imported successfully. The retained browser diagnostics show no EPUB parsing error, and the exact cause of Readest's behavior is unknown.
-Manual Thorium Reader review found both publications opened and read successfully, so the Readest observation is reader-specific. The TTS EPUB was repackaged after that review to remove repeated chapter boilerplate; that exact new ZIP has not been reopened manually.
-Further manual review found two unresolved publication defects. In Thăng Long nổi giận, detached duplicate initial-letter blocks recur across additional chapters beyond the two currently repaired cases. In Đêm hội Long Trì, the opening audiobook credit — "Tác phẩm Đêm hội Long Trì - tiểu thuyết - tác giả Nguyễn Huy Tưởng - NXB Kim Đồng ấn hành - người đọc Ngọc Hân" — is currently synchronized to the visible "1912 - 1960" text; playback only advances after the following biographical sentence finishes. These observations require publication-level source/alignment repair without changing frozen #14/#15 evidence.
-Synchronized playback, highlighting, audio quality, and human accessibility checks remain incomplete. The PR remains draft until these defects and the remaining manual checks are resolved.
+Manual Thorium Reader review found earlier packages of both publications opened and read successfully, so the Readest observation is reader-specific. The exact rebuilt alignment Gold EPUB has been reopened in Thorium and its opening credit/biography highlighting checked. The rebuilt TTS Gold EPUB still requires its new manual opening and chapter-opening check.
+Broader synchronization playback, audio quality, and human accessibility checks remain incomplete. The PR remains draft until the required manual checks are completed.
