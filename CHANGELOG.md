@@ -5,6 +5,22 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] - 2026-09-30
+
+### Added
+
+- Add synchronization target extraction from EPUB XHTML (`lyrepub.epub_text`), giving each sentence a stable addressable id for overlay publication, covered by unit tests.
+- Add EPUB 3.3 Media Overlays publishing (`lyrepub.media_overlays`) from timed XHTML fragments.
+- Add the frozen TTS pathway: synthesis frontend with Compose-driven audio.cpp inference (`scripts/tts_synthesis.py`), a server benchmark against the frozen Issue #14 evidence (`scripts/tts_benchmark.py`), and the frozen TTS feasibility report (`docs/research/tts-feasibility.md`).
+- Add the full TTS publication pipeline for Thăng Long nổi giận (`scripts/tts_publication.py`) with reviewed source repairs and shared source-preserving text treatments (`lyrepub.tts_text`).
+- Add final publication repair, Opus repackaging with exact SMIL timing retention, accessibility discovery metadata, and measured opening boundaries (`scripts/publication.py`, `lyrepub.audio`, `scripts/opening-boundaries.mjs`), with the reproduction and validation record (`docs/research/publication-validation.md`).
+- Add research surveys for TTS candidates (`docs/research/tts-candidate-survey.md`) and alignment support (`docs/research/alignment-support-survey.md`), and the native Storyteller CTC alignment validation on Đêm hội Long Trì (`docs/research/alignment-validation.md`).
+- Add Compose services for local audio.cpp inference, EPUBCheck, Ace, and Playwright (`compose.yaml`), replacing docker-bake, and configure the VieNeu TTS server (`containers/audiocpp-server.json`).
+
+### Fixed
+
+- Correct NLP pipeline type annotations in NER and segmentation (`lyrepub.ner`, `lyrepub.segmentation`, `scripts/screen_ner.py`).
+
 ## [0.3.0] - 2026-09-26
 
 ### Added
@@ -52,6 +68,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Add repository guidelines, agent workflows, and contribution documentation.
 - Add agent skills for conventional commits, branches, GitHub issues, and release workflows.
 
-[0.3.0]: https://github.com/itskyf/lyrepub/compare/v0.2.0...release/v0.3
+[0.4.0]: https://github.com/itskyf/lyrepub/compare/v0.3.0...v0.4.0
+[0.3.0]: https://github.com/itskyf/lyrepub/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/itskyf/lyrepub/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/itskyf/lyrepub/releases/tag/v0.1.0
