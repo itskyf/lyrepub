@@ -5,6 +5,10 @@
 // adopted boundaries and their rationale are recorded in
 // docs/research/publication-validation.md.
 //
+// Isolated diagnostic pinned to the mise-managed @storyteller-platform/align
+// 0.2.4 install: it imports that package's low-level modules, which the
+// package public API does not expose, so it is not covered by unit tests.
+//
 // Usage: node scripts/opening-boundaries.mjs [emissions-dir]
 
 import { existsSync, realpathSync } from "node:fs";

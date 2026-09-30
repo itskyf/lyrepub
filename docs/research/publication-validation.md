@@ -107,11 +107,12 @@ done
 ```
 
 EPUBCheck 5.4.0 (Compose build of `w3c/epubcheck` at git ref `a51f751b986ac424488586aae75c43d047bbdc53`) and Ace 1.4.6 (`@daisy/ace-cli@1.4.6` on the pinned Puppeteer base image; see `compose.yaml` and `containers/Containerfile.ace`) were chosen as the current production releases.
-The recorded EPUBCheck runs validate under the EPUB 3.3 ruleset — the output banner states "Validating using EPUB version 3.3 rules" — matching the protocol's stable EPUB 3.3 target.
+Upstream EPUBCheck 5.4.0 documents EPUB 3.4 checking while the protocol target remains stable EPUB 3.3; the recorded runs report the EPUB 3.3 ruleset for these publications, which is consistent with the target but does not by itself establish strict EPUB 3.3-only validation.
 The full declared dev suite passes 42 tests, and `hk check --pr` passes.
 All 280 files in the retained frozen-evidence checksum inventory remain unchanged.
 Both final EPUBs pass EPUBCheck with zero errors and warnings.
-Ace flags only omitted discovery and certification metadata for both books (`schema:accessModeSufficient`, `a11y:certifiedBy`, `a11y:certifierCredential`, `a11y:certifierReport`, `dcterms:conformsTo`), whose claims await the incomplete human review.
+Ace flags only omitted metadata for both books: the recommended discovery property `schema:accessModeSufficient`, the conformance-claim properties `dcterms:conformsTo` and `a11y:certifiedBy`, and the conditional `a11y:certifierCredential` and `a11y:certifierReport` when a conformance claim is made.
+No conformance claim is declared before the pending human accessibility review.
 The alignment package removes eight unused source resources while retaining its referenced cover, portrait, transcription, and seven audio tracks.
 
 ## Optional browser validation
