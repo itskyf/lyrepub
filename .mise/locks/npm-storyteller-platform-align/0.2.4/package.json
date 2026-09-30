@@ -1,0 +1,7 @@
+{
+	"name": "mise-npm-install",
+	"private": true,
+	"dependencies": {
+		"@storyteller-platform/align": "0.2.4"
+	}
+}
