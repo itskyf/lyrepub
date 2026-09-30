@@ -337,11 +337,17 @@ def _alignment_opening(
     package: Element, archive: ZipFile, edits: dict[str, bytes]
 ) -> None:
     """Move the spoken credit to the visible cover before biography playback."""
-    # Boundaries measured from the retained #15 emissions: biography onset
-    # 20.900 s (PulseVAD burst, MOSS 20.82 s agrees), Nguyễn 21.42 s, spoken
-    # years 22.58 s (word-level CTC forced alignment); values recorded in
-    # publication-validation.md.
-    onset, name_onset, year_onset = "20.900s", "21.400s", "22.600s"
+    # Opening boundaries are measured, not tuned: the VAD burst and ASR
+    # transcript fix the biography onset, word-level CTC forced alignment on
+    # the retained #15 emissions fixes the interior onsets and the tiled
+    # following-sentence boundary. Derivation and rerun command are recorded
+    # in docs/research/publication-validation.md.
+    onset, name_onset, year_onset, next_onset = (
+        "20.900s",
+        "21.400s",
+        "22.600s",
+        "26.600s",
+    )
     manifest = package.find("p:manifest", NS)
     cover = manifest.find("p:item[@href='Text/cover.xhtml']", NS)
     if cover is None or "OEBPS/Text/cover.xhtml" not in archive.namelist():
@@ -356,6 +362,7 @@ def _alignment_opening(
         ("Text-section_11.html-s0", "7.960s", "9.080s"),
         ("Text-section_11.html-s1", "9.080s", "10.560s"),
         ("Text-section_11.html-s2", "10.560s", "26.100s"),
+        ("Text-section_11.html-s3", "26.100s", "29.920s"),
     )
     if len(pars) < len(expected) or any(
         (
@@ -373,12 +380,13 @@ def _alignment_opening(
     for par, begin, end in zip(
         pars[1:4],
         (onset, name_onset, year_onset),
-        (name_onset, year_onset, "26.100s"),
+        (name_onset, year_onset, next_onset),
         strict=True,
     ):
         par_audio = par.find("s:audio", NS)
         par_audio.set("clipBegin", begin)
         par_audio.set("clipEnd", end)
+    pars[4].find("s:audio", NS).set("clipBegin", next_onset)
     edits[path] = tostring(smil, encoding="utf-8", xml_declaration=True)
 
     cover_smil = Element(f"{{{SMIL}}}smil", {"version": "3.0"})
