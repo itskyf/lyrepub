@@ -13,6 +13,7 @@ from zipfile import ZIP_DEFLATED, ZIP_STORED, ZipFile
 from defusedxml import ElementTree
 
 from lyrepub.audio import encode_opus
+from lyrepub.epub_text import Block, extract_blocks
 
 OPF = "http://www.idpf.org/2007/opf"
 XHTML = "http://www.w3.org/1999/xhtml"
@@ -25,6 +26,18 @@ DISTRIBUTION_HEADER = (
     "Hoàng Quốc Hải",
     "www.dtv-ebook.com",
 )
+
+
+def narration_blocks(source: Path) -> list[Block]:
+    """Exclude the confirmed chapter header without renumbering source blocks."""
+    boilerplate = set(
+        zip(DISTRIBUTION_HEADER, ((1, 0), (1, 1), (1, 2, 0)), strict=True)
+    )
+    return [
+        block
+        for block in extract_blocks(source)
+        if (block.text, block.element_path) not in boilerplate
+    ]
 
 
 register_namespace("", XHTML)

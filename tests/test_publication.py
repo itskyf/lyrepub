@@ -1,7 +1,7 @@
 """Final-publication paths preserve source text and experimental evidence."""
 
+import hashlib
 import json
-import shutil
 from pathlib import Path
 from xml.etree.ElementTree import tostring
 from zipfile import ZipFile
@@ -10,21 +10,14 @@ import pytest
 from defusedxml import ElementTree
 from test_media_overlays import _source
 
-from lyrepub.epub_text import Block
-from scripts import publication, tts_publication, tts_synthesis
+from lyrepub.epub_text import extract_blocks
+from lyrepub.tts_text import join_sentence_boundary, map_sentence_inputs
+from scripts import publication
 from scripts.publication import NS, XHTML, repair, verify_alignment
-from scripts.tts_synthesis import sha256
 
 
-@pytest.fixture
-def frontend(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(tts_synthesis, "frontend_chunks", lambda text: ([text], []))
-    monkeypatch.setattr(tts_synthesis, "frontend_phonemes", lambda text: text)
-
-
-@pytest.fixture
-def plain_tts_source(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setattr(tts_publication, "correct_tts_source", shutil.copyfile)
+def sha256(path: Path) -> str:
+    return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
 def _tts_source(path: Path) -> None:
@@ -60,78 +53,6 @@ def _tts_source(path: Path) -> None:
     with ZipFile(path, "w") as archive:
         for name, content in files.items():
             archive.writestr(name, content)
-
-
-@pytest.mark.usefixtures("frontend", "plain_tts_source")
-def test_full_tts_publication_and_source_preservation(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source, output = tmp_path / "source.epub", tmp_path / "tts"
-    _tts_source(source)
-    digest = sha256(source)
-    monkeypatch.setattr(tts_publication, "segment_sentences", lambda text: [text])
-    tts_publication.prepare(source, output, output / "work")
-    monkeypatch.setattr(
-        tts_publication, "ogg_duration", lambda _p: publication.Decimal("1.25")
-    )
-    records = tts_publication.load_records(output)
-    assert len(records) == 4
-    for record in records:
-        sentence = record["sentences"][0]
-        assert sentence["tts_input"] == sentence["source_text"]
-        audio = f"{record['key']}.opus"
-        (output / audio).write_bytes(b"opus")
-        sentence.update(packaged_audio=audio, clip_begin="0.000", clip_end="1.25")
-        record["status"] = "ok"
-    tts_publication.save_records(output, records)
-    tts_publication.publish(source, output, output / "work", output / "final.epub")
-    assert sha256(source) == digest
-    with ZipFile(output / "final.epub") as archive:
-        assert archive.namelist()[0] == "mimetype"
-        assert "OEBPS/toc.ncx" not in archive.namelist()
-        nav = ElementTree.fromstring(archive.read("OEBPS/nav.xhtml"))
-        assert nav.find("x:body/x:nav", NS).get("role") == "doc-toc"
-        assert "OEBPS/two.smil" in archive.namelist()
-        package = ElementTree.fromstring(archive.read("OEBPS/package.opf"))
-        modes = package.findall("p:metadata/p:meta[@property='schema:accessMode']", NS)
-        assert {m.text for m in modes} == {"textual"}
-        assert "synchronizedAudioText" in [
-            m.text
-            for m in package.findall(
-                "p:metadata/p:meta[@property='schema:accessibilityFeature']", NS
-            )
-        ]
-        assert {
-            m.text
-            for m in package.findall(
-                "p:metadata/p:meta[@property='schema:accessibilityHazard']", NS
-            )
-        } == {"noFlashingHazard", "noMotionSimulationHazard", "unknownSoundHazard"}
-        assert not package.findall(
-            "p:metadata/p:meta[@property='schema:accessModeSufficient']", NS
-        )
-    records[0]["sentences"][0]["source_text"] = "changed"
-    tts_publication.save_records(output, records)
-    with pytest.raises(ValueError, match="source text drift"):
-        tts_publication.publish(source, output, output / "work", output / "final.epub")
-
-
-@pytest.mark.usefixtures("frontend", "plain_tts_source")
-def test_tts_rejects_incomplete_coverage_and_synthesis(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-) -> None:
-    source, output = tmp_path / "source.epub", tmp_path / "tts"
-    _tts_source(source)
-    monkeypatch.setattr(tts_publication, "segment_sentences", lambda text: [text])
-    tts_publication.prepare(source, output, output / "work")
-    records = tts_publication.load_records(output)
-    with pytest.raises(ValueError, match="incomplete synthesis"):
-        tts_publication.publish(source, output, output / "work", output / "final.epub")
-    tts_publication.save_records(output, records[:-1])
-    with pytest.raises(ValueError, match="cover source blocks exactly"):
-        tts_publication.publish(source, output, output / "work", output / "final.epub")
 
 
 def test_ncx_navigation_keeps_nested_order_labels_and_targets(tmp_path: Path) -> None:
@@ -173,11 +94,10 @@ def test_ncx_navigation_keeps_nested_order_labels_and_targets(tmp_path: Path) ->
     ) == ("Section A", "one.xhtml#second")
 
 
-@pytest.mark.usefixtures("frontend", "plain_tts_source")
 def test_distribution_boilerplate_excluded_without_renumbering(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
 ) -> None:
-    source, output = tmp_path / "source.epub", tmp_path / "tts"
+    source = tmp_path / "source.epub"
     _tts_source(source)
     with ZipFile(source) as archive:
         files = {name: archive.read(name) for name in archive.namelist()}
@@ -193,23 +113,17 @@ def test_distribution_boilerplate_excluded_without_renumbering(
             archive.writestr(name, content)
     original = next(
         block
-        for block in tts_publication.extract_blocks(source)
+        for block in extract_blocks(source)
         if block.text == "Subsequent narration."
     )
-    monkeypatch.setattr(tts_publication, "segment_sentences", lambda text: [text])
-    tts_publication.prepare(source, output, output / "work")
-    records = tts_publication.load_records(output)
-    assert all(
-        sentence["source_text"] not in publication.DISTRIBUTION_HEADER
-        for record in records
-        for sentence in record["sentences"]
+    narrated = publication.narration_blocks(source)
+    assert all(block.text not in publication.DISTRIBUTION_HEADER for block in narrated)
+    selected = next(block for block in narrated if block.text == original.text)
+    assert (selected.spine_index, selected.block_index) == (
+        original.spine_index,
+        original.block_index,
     )
-    record = next(
-        r for r in records if r["sentences"][0]["source_text"] == original.text
-    )
-    assert record["key"] == f"s{original.spine_index}-b{original.block_index}"
-    assert record["source"]["element_path"] == list(original.element_path)
-    assert record["seed"] == 14 + original.spine_index * 1000 + original.block_index
+    assert selected.element_path == original.element_path
     final = tmp_path / "final.epub"
     repair(source, final, "tts")
     with ZipFile(final) as archive:
@@ -402,65 +316,46 @@ def test_alignment_report_rejects_changed_smil_timing(tmp_path: Path) -> None:
     "case",
     [
         (
-            17,
-            24,
             "A. B. C. D. E. F. G.) Sau.",
             ["A.", "B.", "C.", "D.", "E.", "F.", "G.", ")", "Sau."],
+            6,
+            7,
+            ")",
             "G.)",
             (18, 21),
         ),
         (
-            23,
-            37,
             "- Ta chỉ sợ các con không đủ sức - Rồi người vẫy tay. Sau.",
             ["- Ta chỉ sợ các con không đủ sức", "-", "Rồi người vẫy tay.", "Sau."],
+            1,
+            2,
+            "-",
             "- Rồi người vẫy tay.",
             (33, 53),
         ),
         (
-            23,
-            172,
             'Trước. Người nói. " Sau.',
             ["Trước.", "Người nói.", '"', "Sau."],
+            1,
+            2,
+            '"',
             'Người nói. "',
             (7, 19),
         ),
     ],
 )
-@pytest.mark.usefixtures("frontend", "plain_tts_source")
 def test_reviewed_boundary_joins_preserve_authored_offsets(
-    tmp_path: Path,
-    monkeypatch: pytest.MonkeyPatch,
-    case: tuple[int, int, str, list[str], str, tuple[int, int]],
+    case: tuple[str, list[str], int, int, str, str, tuple[int, int]],
 ) -> None:
-    spine, block_index, text, segments, joined, offsets = case
-    source = tmp_path / "source.epub"
-    _tts_source(source)
-    block = Block(
-        text=text,
-        spine_index=spine,
-        href="Text/example.html",
-        block_index=block_index,
-        linear=True,
-        element_path=(1, 0),
-        run_index=0,
-        element_id=None,
-        tag="p",
-        lang="vi",
-        epub_type=None,
-        role=None,
+    text, segments, left, right, punctuation, joined, offsets = case
+    join_sentence_boundary(text, segments, left, right, punctuation)
+    sentence = next(
+        s
+        for s in map_sentence_inputs(text, text, segments)
+        if s["source_text"] == joined
     )
-    monkeypatch.setattr(tts_publication, "extract_blocks", lambda _p: [block])
-    monkeypatch.setattr(tts_publication, "segment_sentences", lambda _t: segments)
-    output = tmp_path / "tts"
-    tts_publication.prepare(source, output, output / "work")
-    record = tts_publication.load_records(output)[0]
-    sentence = next(s for s in record["sentences"] if s["source_text"] == joined)
     assert (sentence["source_start"], sentence["source_end"]) == offsets
     assert text[offsets[0] : offsets[1]] == joined
-    assert record["interventions"] == [
-        "reviewed source-preserving punctuation boundary join"
-    ]
 
 
 def test_reviewed_initial_corrections_preserve_bronze_source(

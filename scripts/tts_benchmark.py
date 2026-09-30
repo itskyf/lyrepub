@@ -9,7 +9,8 @@
 # ///
 """Exercise the retained TTS benchmark through the Compose server.
 
-Source and model locations are runtime inputs. Outputs live in gitignored data/.
+The source location is a runtime input; the model is configured by Compose.
+Outputs live in gitignored data/.
 """
 
 import argparse
@@ -24,8 +25,9 @@ from shutil import which
 
 from lyrepub.epub_text import extract_blocks
 from lyrepub.segmentation import segment_sentences
+from lyrepub.tts_text import normalize_slash_enumeration
 from scripts import tts_synthesis
-from scripts.tts_synthesis import MANUAL_NORMALIZATIONS, normalize_slash_enumeration
+from scripts.tts_synthesis import MANUAL_NORMALIZATIONS
 
 ISBN = "9786045633946"
 CASES = (

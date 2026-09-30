@@ -25,35 +25,24 @@ from zipfile import ZipFile
 from defusedxml import ElementTree
 
 from lyrepub.audio import ogg_duration
-from lyrepub.epub_text import Block, extract_blocks, materialize_sentence_targets
+from lyrepub.epub_text import materialize_sentence_targets
 from lyrepub.media_overlays import Timing, publish_media_overlays
 from lyrepub.segmentation import segment_sentences
+from lyrepub.tts_text import join_sentence_boundary, normalize_slash_enumeration
 from scripts.publication import (
-    DISTRIBUTION_HEADER,
     correct_tts_source,
+    narration_blocks,
     publication_metadata,
     repair,
 )
 from scripts.tts_synthesis import (
     MANUAL_NORMALIZATIONS,
-    normalize_slash_enumeration,
     prepare_sentences,
     sha256,
     synthesize_records,
 )
 
 LOGGER = logging.getLogger(__name__)
-
-
-def _narration_blocks(source: Path) -> list[Block]:
-    boilerplate = set(
-        zip(DISTRIBUTION_HEADER, ((1, 0), (1, 1), (1, 2, 0)), strict=True)
-    )
-    return [
-        block
-        for block in extract_blocks(source)
-        if (block.text, block.element_path) not in boilerplate
-    ]
 
 
 def load_records(output: Path) -> list[dict]:
@@ -77,13 +66,11 @@ def prepare(source: Path, output: Path, work: Path) -> None:
     records = []
     bronze_blocks = [
         block
-        for block in _narration_blocks(source)
+        for block in narration_blocks(source)
         if (block.href, block.text)
         not in {("Text/1.html", "V"), ("Text/12.html", '"P')}
     ]
-    for original, block in zip(
-        bronze_blocks, _narration_blocks(corrected), strict=True
-    ):
+    for original, block in zip(bronze_blocks, narration_blocks(corrected), strict=True):
         expected_text = (
             original.text.replace('"P hú', '"Phú', 1)
             if original.href == "Text/12.html"
@@ -105,18 +92,7 @@ def prepare(source: Path, output: Path, work: Path) -> None:
             expected = {(17, 24): ")", (23, 37): "-", (23, 172): '"'}[
                 block.spine_index, block.block_index
             ]
-            punctuation = left if expected == "-" else right
-            if authored[punctuation] != expected:
-                message = "reviewed punctuation target differs from source"
-                raise ValueError(message)
-            cursor = 0
-            for previous in authored[:left]:
-                cursor = block.text.index(previous, cursor) + len(previous)
-            start = block.text.index(authored[left], cursor)
-            end = block.text.index(authored[right], start + len(authored[left])) + len(
-                authored[right]
-            )
-            authored[left : right + 1] = [block.text[start:end]]
+            join_sentence_boundary(block.text, authored, left, right, expected)
         try:
             sentences = prepare_sentences(block.text, treated, authored, manual)
         except ValueError as exc:
@@ -197,7 +173,7 @@ def _prepared_source(source: Path, output: Path, work: Path) -> Path:
 def publish(source: Path, output: Path, work: Path, final: Path) -> None:
     """Materialize original source ranges and publish measured sentence audio."""
     source = _prepared_source(source, output, work)
-    blocks = {(b.spine_index, b.block_index): b for b in _narration_blocks(source)}
+    blocks = {(b.spine_index, b.block_index): b for b in narration_blocks(source)}
     records = load_records(output)
     identities = [
         (r["source"]["spine_index"], r["source"]["block_index"]) for r in records

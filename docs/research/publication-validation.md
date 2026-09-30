@@ -122,8 +122,8 @@ done
 ```
 
 Normal pytest checks reusable source mapping, coverage, all three approved punctuation joins, fail-closed source corrections, nested navigation, Opus packaging, manifest/SMIL references, and frozen alignment timings using only declared project and dev dependencies.
-The focused suite passes 33 tests; the full suite passes 44 tests.
-`hk check --pr` passes. FFmpeg and ffprobe are resolved from the Pixi-managed `PATH`; Ruff retains S607 and ignores S603 for the reviewed shell-free subprocess pattern. PEP 723-only imports remain local to runtime functions, so normal pytest uses only declared project and dev dependencies.
+The focused suite passes 31 tests; the full suite passes 42 tests.
+`hk check --pr` passes. FFmpeg and ffprobe are resolved from the Pixi-managed `PATH`; Ruff retains S607 and ignores S603 for the reviewed shell-free subprocess pattern. Normal pytest imports reusable text mapping from `src/lyrepub`; the standalone TTS scripts import their PEP 723 runtime dependencies at module scope and were import-checked through their inline-uv commands.
 All 280 files in the retained frozen-evidence checksum inventory remain unchanged.
 Actual frontend and inference integration runs through the inline-uv benchmark and publication commands.
 Both final EPUBs pass Compose EPUBCheck with zero errors and warnings.

@@ -5,15 +5,19 @@ import hashlib
 import io
 import json
 import logging
-import re
 from pathlib import Path
-from typing import TYPE_CHECKING
 
-if TYPE_CHECKING:
-    from numpy import ndarray
-    from zapros import AsyncClient
+import numpy as np
+import soundfile
+import zapros
+from vieneu_utils import core_utils
+from vieneu_utils.phonemize_text import (
+    normalize_to_chunks_v3_with_gaps,
+    phonemize_text_with_emotions,
+)
 
 from lyrepub.audio import encode_opus
+from lyrepub.tts_text import map_sentence_inputs
 
 SAMPLE_RATE = 48000
 MANUAL_NORMALIZATIONS = {
@@ -21,30 +25,6 @@ MANUAL_NORMALIZATIONS = {
 }
 
 LOGGER = logging.getLogger(__name__)
-
-
-def normalize_slash_enumeration(text: str) -> str:
-    """Separate ordered slash-list markers; leave ambiguous slashes unchanged."""
-    markers = list(
-        re.finditer(r"(?:^|(?<=[(:;.\n]))[ \t]*(\d+)/[ \t]+(?=[^\W\d_])", text)
-    )
-    replacements = []
-    run = []
-    minimum_markers = 2
-    for marker in markers:
-        number = int(marker.group(1))
-        if run and number != int(run[-1].group(1)) + 1:
-            if len(run) >= minimum_markers:
-                replacements.extend(run)
-            run = []
-        if run or number == 1:
-            run.append(marker)
-    if len(run) >= minimum_markers:
-        replacements.extend(run)
-    for marker in reversed(replacements):
-        slash = marker.end(1)
-        text = text[:slash] + "," + text[slash + 1 :]
-    return text
 
 
 def sha256(path: Path) -> str:
@@ -62,69 +42,31 @@ def prepare_sentences(
 
     Apply explicit manual TTS normalization after locating authored offsets.
     """
-    if len(source) != len(text_input):
-        message = "enumeration treatment must preserve source offsets"
-        raise ValueError(message)
-    if (
-        manual_normalization
-        and text_input.count(manual_normalization["source_span"]) != 1
-    ):
-        message = "manual normalization requires exactly one observed source span"
-        raise ValueError(message)
-    result = []
-    cursor = 0
-    manual_applied = False
-    for index, sentence in enumerate(sentences):
-        start = source.find(sentence, cursor)
-        if start < 0 or source[cursor:start].strip():
-            message = "sentence segmentation lost or changed authored text"
-            raise ValueError(message)
-        end = start + len(sentence)
-        prepared = text_input[start:end]
-        if manual_normalization and manual_normalization["source_span"] in prepared:
-            prepared = prepared.replace(
-                manual_normalization["source_span"], manual_normalization["tts_text"]
-            )
-            manual_applied = True
-        chunks, gaps = frontend_chunks(prepared)
+    result = map_sentence_inputs(source, text_input, sentences, manual_normalization)
+    for sentence in result:
+        chunks, gaps = normalize_to_chunks_v3_with_gaps(sentence["tts_input"])
         if not chunks or any(not chunk.strip() for chunk in chunks):
-            message = f"frontend produced empty synthesis input: {sentence!r}"
+            message = (
+                f"frontend produced empty synthesis input: {sentence['source_text']!r}"
+            )
             raise ValueError(message)
-        result.append(
+        sentence["gaps"] = gaps
+        sentence["chunks"] = [
             {
-                "index": index,
-                "source_start": start,
-                "source_end": end,
-                "source_text": sentence,
-                "tts_input": prepared,
-                "gaps": gaps,
-                "chunks": [
-                    {
-                        "normalized_text": chunk,
-                        "phonemes": frontend_phonemes(chunk),
-                    }
-                    for chunk in chunks
-                ],
+                "normalized_text": chunk,
+                "phonemes": phonemize_text_with_emotions(chunk),
             }
-        )
-        cursor = end
-    if manual_normalization and not manual_applied:
-        message = "observed manual-normalization span crosses sentence targets"
-        raise ValueError(message)
-    if source[cursor:].strip() or not result:
-        message = "sentence segmentation left authored text uncovered"
-        raise ValueError(message)
+            for chunk in chunks
+        ]
     return result
 
 
 def package_audio(
-    output: Path, work: Path, name: str, pcm: "ndarray", rate: int
+    output: Path, work: Path, name: str, pcm: np.ndarray, rate: int
 ) -> dict:
     """Encode joined narration as Opus and record measured clip duration."""
     wav = work / "audio" / f"{name}.wav"
     opus = output / "audio" / f"{name}.opus"
-    import soundfile
-
     soundfile.write(wav, pcm, rate, subtype="PCM_16")
     duration = str(encode_opus(wav, opus))
     return {
@@ -136,30 +78,14 @@ def package_audio(
     }
 
 
-def frontend_chunks(text: str) -> tuple[list[str], list[float]]:
-    from vieneu_utils.phonemize_text import normalize_to_chunks_v3_with_gaps
-
-    return normalize_to_chunks_v3_with_gaps(text)
-
-
-def frontend_phonemes(text: str) -> str:
-    from vieneu_utils.phonemize_text import phonemize_text_with_emotions
-
-    return phonemize_text_with_emotions(text)
-
-
-def read_pcm(source: Path | io.BytesIO) -> tuple["ndarray", int]:
-    import soundfile
-
+def read_pcm(source: Path | io.BytesIO) -> tuple[np.ndarray, int]:
     return soundfile.read(source, dtype="float32", always_2d=True)
 
 
 async def request_audio(
-    client: "AsyncClient", semaphore: asyncio.Semaphore, work: Path, chunk: dict
+    client: zapros.AsyncClient, semaphore: asyncio.Semaphore, work: Path, chunk: dict
 ) -> Path:
     """Send one frozen phoneme chunk and reject HTTP or invalid WAV results."""
-    from numpy import isfinite
-
     phonemes = chunk["phonemes"]
     if not phonemes.strip() or "\n" in phonemes:
         message = "prepared request must contain one nonempty phoneme paragraph"
@@ -191,7 +117,7 @@ async def request_audio(
             message = "audio.cpp returned a non-WAV response"
             raise ValueError(message)
         pcm, rate = await asyncio.to_thread(read_pcm, io.BytesIO(content))
-        if rate != SAMPLE_RATE or not len(pcm) or not isfinite(pcm).all():
+        if rate != SAMPLE_RATE or not len(pcm) or not np.isfinite(pcm).all():
             message = "audio.cpp returned invalid PCM"
             raise ValueError(message)
         wav = work / "audio" / f"{chunk['key']}.wav"
@@ -201,7 +127,7 @@ async def request_audio(
 
 async def synthesize_sentences(
     paths: tuple[Path, Path],
-    client: "AsyncClient",
+    client: zapros.AsyncClient,
     semaphore: asyncio.Semaphore,
     record: dict,
     *,
@@ -209,8 +135,6 @@ async def synthesize_sentences(
 ) -> None:
     """Join frontend chunks, package sentence clips and optionally a benchmark block."""
     output, work = paths
-    from vieneu_utils import core_utils
-
     sentences_pcm = []
     rate = None
     for sentence in record["sentences"]:
@@ -255,8 +179,6 @@ async def synthesize_records(
     filename: str,
 ) -> None:
     """Retain failures, save resumable records and never switch inference paths."""
-    import zapros
-
     join_block = filename == "cases.json"
 
     if concurrency <= 0:
