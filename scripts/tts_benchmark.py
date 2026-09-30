@@ -22,8 +22,8 @@ import logging
 import subprocess
 import tempfile
 from pathlib import Path
-from shutil import which
 
+from lyrepub.audio import media_tool
 from lyrepub.epub_text import extract_blocks
 from lyrepub.segmentation import segment_sentences
 from lyrepub.tts_text import normalize_slash_enumeration
@@ -121,10 +121,7 @@ def prepare(output: Path, source: Path) -> None:
 
 def compare(output: Path, frozen: Path) -> None:
     """Compare frozen sentence inputs, timings and decoded Opus audio."""
-    ffmpeg = which("ffmpeg")
-    if ffmpeg is None:
-        message = "ffmpeg is required for benchmark PCM comparison"
-        raise FileNotFoundError(message)
+    ffmpeg = media_tool("ffmpeg")
     records = {record["key"]: record for record in load_records(output)}
     comparisons = []
     for baseline in load_records(frozen):
