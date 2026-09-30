@@ -6,6 +6,9 @@ data/
 .claude/
 apm_modules/
 
+# Local browser validation snapshots and sessions
+.playwright-cli/
+
 ###------------------###
 ###  GitHub: Python  ###
 ###------------------###

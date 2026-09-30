@@ -5,6 +5,7 @@ docker-compose = "latest"
 hk = "latest"
 lychee = "latest"
 node = "latest"
+"npm:@playwright/cli" = { version = "0.1.19", trust_policy_excludes = ["@playwright/cli@0.1.19", "playwright@1.63.0-alpha-2026-08-31", "playwright-core@1.63.0-alpha-2026-08-31"] }
 "npm:@storyteller-platform/align" = "0.2.4"
 pixi = "latest"
 ruff = "latest"

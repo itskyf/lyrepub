@@ -39,6 +39,7 @@ select = [
   "UP",  # pyupgrade
   "W",  # pycodestyle
 ]
+ignore = ["S603"]
 
 [lint.per-file-ignores]
 "tests/**" = ["S101", "PLR2004"]

@@ -44,6 +44,18 @@ Outputs are validated with EPUBCheck, Ace by DAISY, and focused manual inspectio
 
 The coursework also requires a DAISY 3 deliverable generated from the completed EPUB using a standard conversion workflow.
 
+## Local data
+
+`data/` is ignored by Git. Its directories have these roles:
+
+| Directory | Contents |
+| --- | --- |
+| `data/bronze/` | Immutable acquired inputs |
+| `data/silver/` | Durable, reusable experimental and processed artifacts |
+| `data/gold/` | Final deliverables |
+| `data/work/` | Disposable staging and diagnostics that can be regenerated |
+| `data/models/` | External model assets |
+
 ## Development
 
 The project uses [Pixi](https://pixi.prefix.dev/) for reproducible environments and system dependencies. Python package dependencies remain in standard `pyproject.toml` metadata so the package can also be installed in environments without Pixi.
@@ -91,6 +103,7 @@ podman compose up audiocpp
 ```
 
 The WebUI is available at `http://127.0.0.1:8080`.
+The server configuration in `containers/audiocpp.json` loads the publication checkpoint and Quỳnh Anh assets from `data/models/VieNeu-TTS-v3-Turbo-GGUF/`.
 
 ### Validators
 
@@ -99,6 +112,18 @@ EPUBCheck and Ace are available as Compose tools:
 ```shell
 podman compose build epubcheck ace
 ```
+
+### Browser validation
+
+The Compose Playwright service provides Chromium for the mise-managed `playwright-cli` without installing a browser on the host:
+
+```shell
+podman compose up --detach playwright
+```
+
+Use the CLI's remote configuration with `browser.isolated` set to `true` and `browser.remoteEndpoint` set to `ws://127.0.0.1:3000/?browser=chromium`.
+The pinned CLI uses the compatible Playwright 1.63 client; the service runs Playwright 1.63.0.
+See [publication validation](docs/research/publication-validation.md) for the import and playback workflow.
 
 ## Repository Map
 

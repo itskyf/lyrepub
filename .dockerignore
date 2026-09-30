@@ -1,0 +1,17 @@
+.agents
+.claude
+.codex
+
+.git
+.github
+.gitignore
+
+.mise
+.pixi
+.venv
+
+.pytest_cache
+.ruff_cache
+.rumdl_cache
+
+.containerignore

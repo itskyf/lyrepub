@@ -1,0 +1,43 @@
+lockfileVersion: '9.0'
+
+settings:
+  autoInstallPeers: true
+  excludeLinksFromLockfile: false
+
+importers:
+
+  .:
+    dependencies:
+      '@playwright/cli':
+        specifier: 0.1.19
+        version: 0.1.19
+
+packages:
+
+  '@playwright/cli@0.1.19':
+    resolution: {integrity: sha512-eGXIsYa5D+dC6wHGf+9uEislhPGip1djK+yiNAD7BVsXN3WzzR1J4ClFAhYhyu7wSEFqhcPrqXAYeBJF1dKJ7A==}
+    engines: {node: '>=18'}
+    hasBin: true
+
+  playwright-core@1.63.0-alpha-2026-08-31:
+    resolution: {integrity: sha512-1ek0Lyr12h6jcs/WTcNoVtzZkQp7D/90PsMuBW/Rm6h3AsWAbzpqj0geMv8+8Tzzr9CSUYvg9kznrVZINQMXXw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+  playwright@1.63.0-alpha-2026-08-31:
+    resolution: {integrity: sha512-3XAsuznfu8jBVJ4QxdGvBkt0+b8ZFwuwJYyOfiIw5ZjUOrNLNRhKxzLzLuydou3gJ9c6eMwVqgzdiOwhy54Kzw==}
+    engines: {node: '>=20'}
+    hasBin: true
+
+snapshots:
+
+  '@playwright/cli@0.1.19':
+    dependencies:
+      playwright: 1.63.0-alpha-2026-08-31
+      playwright-core: 1.63.0-alpha-2026-08-31
+
+  playwright-core@1.63.0-alpha-2026-08-31: {}
+
+  playwright@1.63.0-alpha-2026-08-31:
+    dependencies:
+      playwright-core: 1.63.0-alpha-2026-08-31
