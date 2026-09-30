@@ -74,11 +74,11 @@ No new audio-quality review is claimed.
 ### Opening boundary measurement
 
 The #17 alignment publication moves the spoken opening credit to visible cover text and starts biography targeting after it.
-The three replacement SMIL boundaries were measured from the retained evidence, not estimated: PulseVAD (audio.cpp `pulsevad-81k-f32`, SHA-256 `574482cd225645646b9474d21a5a05eb6351efc8193d7eedb7ab241696146bec`) found the biography as one continuous speech burst 20.900–26.200 s with no internal pause at any tested threshold, and MOSS ASR (`moss-transcribe-diarize-bf16`, SHA-256 `5bc627289e2586fc2d9269afda15a305e545a4ff3512c902889be71d58e56ad5`) confirmed the spoken transcript `Nhà văn Nguyễn Huy Tưởng, sinh năm 1912, mất năm 1960.` at 20.82–26.18 s.
-Word-level CTC forced alignment on the retained #15 emissions (pinned `@storyteller-platform/align` 0.2.4) placed `Nhà` at 20.90 s, `Nguyễn` at 21.42 s, and `sinh` at 22.58 s; `Quê` at 26.58 s matches the frozen boundary of the following sentence group.
-Adopted at 0.1 s precision: credit 0.000–20.900, `Nhà văn` 20.900–21.400, `NGUYỄN HUY TƯỞNG` 21.400–22.600, `(1912 – 1960)` 22.600–26.100 (end unchanged).
-The years clause has weak local CTC evidence (label scores 1–6 against 90+ elsewhere), so its onset is the forced-alignment result between the strong flanking anchors, with MOSS as the independent transcript check.
-Raw MOSS, VAD, and word-timing outputs are retained under `data/work/issue-17/opening-locator/`.
+All four opening boundaries were measured from the retained evidence rather than estimated: audio.cpp PulseVAD found the biography as one continuous speech burst (20.900–26.200 s, no internal pause at any tested threshold), MOSS ASR confirmed the spoken transcript `Nhà văn Nguyễn Huy Tưởng, sinh năm 1912, mất năm 1960.`, and word-level CTC forced alignment on the retained #15 emissions placed the onsets of `Nhà` at 20.90 s, `Nguyễn` at 21.42 s, `sinh` at 22.58 s, and `Quê` at 26.58 s.
+Adopted at 0.1 s precision: credit 0.000–20.900, `Nhà văn` 20.900–21.400, `NGUYỄN HUY TƯỞNG` 21.400–22.600, `(1912 – 1960)` 22.600–26.600, `Quê quán…` 26.600–29.920.
+The previous 26.100 boundary was the aligner's half-second-padded span start, so the s3 begin is re-anchored to the measured `Quê` onset; its end and all later SMIL timings stay frozen.
+The years clause carries weak local CTC evidence, so its onset is the forced-alignment result between the strong flanking anchors, with MOSS as the independent transcript check.
+Reproduce the derivation with `node scripts/opening-boundaries.mjs`; the raw MOSS/VAD diagnostics under `data/work/issue-17/opening-locator/` are regenerable work evidence.
 The frozen #15 report and aligned EPUB are unchanged; Thorium playback of the re-measured opening is a pending manual check below.
 
 Alignment title-attribute notes become linked footnotes with backlinks and their original text; duplicate title attributes are removed after materialization.
@@ -106,7 +106,8 @@ for book in thang-long-noi-gian dem-hoi-long-tri; do
 done
 ```
 
-EPUBCheck is the Compose build of `w3c/epubcheck` at git ref `a51f751b986ac424488586aae75c43d047bbdc53`; Ace is `@daisy/ace-cli@1.4.6` on the pinned Puppeteer base image (see `compose.yaml` and `containers/Containerfile.ace`).
+EPUBCheck 5.4.0 (Compose build of `w3c/epubcheck` at git ref `a51f751b986ac424488586aae75c43d047bbdc53`) and Ace 1.4.6 (`@daisy/ace-cli@1.4.6` on the pinned Puppeteer base image; see `compose.yaml` and `containers/Containerfile.ace`) were chosen as the current production releases.
+The recorded EPUBCheck runs validate under the EPUB 3.3 ruleset — the output banner states "Validating using EPUB version 3.3 rules" — matching the protocol's stable EPUB 3.3 target.
 The full declared dev suite passes 42 tests, and `hk check --pr` passes.
 All 280 files in the retained frozen-evidence checksum inventory remain unchanged.
 Both final EPUBs pass EPUBCheck with zero errors and warnings.
@@ -136,6 +137,6 @@ playwright-cli -s=readest requests
 Earlier Readest imports of both publications transferred successfully but remained at "Loading…"; a bronze source control imported successfully.
 The retained browser diagnostics show no EPUB parsing error, and the exact cause of Readest's behavior is unknown.
 Manual Thorium Reader review found earlier packages of both publications opened and read successfully, so the Readest observation is reader-specific.
-Pending manual checks: the re-measured alignment opening in Thorium (credit highlighting, biography transitions at 20.9/21.4/22.6 s), the rebuilt TTS Gold chapter openings, and the broader synchronization playback, audio-quality, and human accessibility reviews.
+Pending manual checks: the re-measured alignment opening in Thorium (credit highlighting and transitions at 20.9/21.4/22.6/26.6 s), the rebuilt TTS Gold chapter openings, and the broader synchronization playback, audio-quality, and human accessibility reviews.
 One transcription uncertainty remains: the spoken credit reader name is heard as "Ngọc Hân" by CTC and "Ngọc Hưng" by MOSS; the displayed credit keeps the earlier reviewed transcription.
 The PR remains draft until the required manual checks are completed.
