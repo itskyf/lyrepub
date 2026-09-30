@@ -289,24 +289,41 @@ def test_alignment_opening_targets_visible_credit_before_biography(
             .get("src")
             .endswith("cover.xhtml#lyrepub-opening-credit")
         )
-        assert cover_par.find("s:audio", NS).get("clipEnd") == "20.900s"
+        cover_audio = cover_par.find("s:audio", NS)
+        assert (cover_audio.get("clipBegin"), cover_audio.get("clipEnd")) == (
+            "0.000s",
+            "20.900s",
+        )
         biography = ElementTree.fromstring(
             archive.read("OEBPS/MediaOverlays/section_11.smil")
         )
         pars = biography.findall(".//s:par", NS)
         assert [
-            (p.get("id"), p.find("s:audio", NS).get("clipBegin")) for p in pars
+            (
+                p.get("id"),
+                p.find("s:audio", NS).get("clipBegin"),
+                p.find("s:audio", NS).get("clipEnd"),
+            )
+            for p in pars
         ] == [
-            ("Text-section_11.html-s0", "20.900s"),
-            ("Text-section_11.html-s1", "21.400s"),
-            ("Text-section_11.html-s2", "22.600s"),
-            ("Text-section_11.html-s3", "26.600s"),
+            ("Text-section_11.html-s0", "20.900s", "21.400s"),
+            ("Text-section_11.html-s1", "21.400s", "22.600s"),
+            ("Text-section_11.html-s2", "22.600s", "26.600s"),
+            ("Text-section_11.html-s3", "26.600s", "29.920s"),
         ]
         package = ElementTree.fromstring(archive.read("OEBPS/package.opf"))
         assert (
             package.find("p:manifest/p:item[@id='cover']", NS).get("media-overlay")
             == "lyrepub-cover-overlay"
         )
+        durations = {
+            meta.get("refines"): meta.text
+            for meta in package.findall(
+                "p:metadata/p:meta[@property='media:duration']", NS
+            )
+        }
+        assert durations["#Text-section_11.html_overlay"] == "00:01:10.98"
+        assert durations["#lyrepub-cover-overlay"] == "00:00:20.90"
 
 
 def test_alignment_report_rejects_changed_smil_timing(tmp_path: Path) -> None:
