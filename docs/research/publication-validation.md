@@ -110,7 +110,7 @@ EPUBCheck is the Compose build of `w3c/epubcheck` at git ref `a51f751b986ac42448
 The full declared dev suite passes 42 tests, and `hk check --pr` passes.
 All 280 files in the retained frozen-evidence checksum inventory remain unchanged.
 Both final EPUBs pass EPUBCheck with zero errors and warnings.
-Ace flags the omitted `accessModeSufficient` property, a SHOULD discovery property whose textual claim awaits human review.
+Ace flags only omitted discovery and certification metadata for both books (`schema:accessModeSufficient`, `a11y:certifiedBy`, `a11y:certifierCredential`, `a11y:certifierReport`, `dcterms:conformsTo`), whose claims await the incomplete human review.
 The alignment package removes eight unused source resources while retaining its referenced cover, portrait, transcription, and seven audio tracks.
 
 ## Optional browser validation
