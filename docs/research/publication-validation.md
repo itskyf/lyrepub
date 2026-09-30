@@ -86,12 +86,13 @@ The server execution path is retained, and no new audio-quality acceptance is in
 
 ## Reviewed source repairs and accessibility
 
-The final TTS source corrects the opening `"P hú` to `"Phú` in chapter 12 and removes its duplicate standalone `"P` paragraph.
+The current TTS publication repair corrects the opening `"P hú` to `"Phú` in chapter 12 and removes its duplicate standalone `"P` paragraph.
 The chapter 1 standalone `V` duplicates the initial of the immediately preceding complete sentence beginning "Vừa bước vào tới cửa cung Thánh từ" and is removed without changing that sentence or the following dialogue.
+Further manual review found the same source defect pattern in additional chapters: a complete first paragraph is followed by a detached duplicate initial before the next paragraph. The two implemented corrections therefore do not yet cover the full source and require a source-wide, structure-based repair before #17 is complete.
 `data/work/issue-17/thang-long-noi-gian/corrected-source.epub` and its checksum make these final-publication changes explicit; source offsets refer to this corrected copy while inference seeds retain the original source block indices.
 These edits do not change bronze inputs or frozen benchmark evidence, and exact-text preservation is claimed only outside the reviewed corrections.
 The reviewed punctuation joins remain source-preserving sentence-boundary joins.
-The TTS inputs are 48 kHz mono 16-bit PCM WAV (768 kb/s uncompressed); all 10,263 retained sentence WAVs were checked. The seven alignment inputs are 44.1 kHz stereo MP3 at approximately 96 kb/s. Both publication paths encode from those inputs with libopus defaults, without a fixed bitrate or forced resampling or channel conversion. No new audio-quality review is claimed.
+The TTS inputs are 48 kHz mono 16-bit PCM WAV (768 kb/s uncompressed); all 10,263 retained sentence WAVs were checked. The seven alignment inputs are 44.1 kHz stereo MP3 at approximately 96 kb/s. Both publication paths encode from those inputs without a project-specified bitrate; FFmpeg/libopus uses its default target bitrate with VBR, and the project does not force resampling or channel conversion. No new audio-quality review is claimed.
 Alignment title-attribute notes become linked footnotes with backlinks and their original text; duplicate title attributes are removed after materialization.
 The reviewed back-cover transcription is ordinary visible text referenced by a short image alternative, rather than an oversized `alt` attribute.
 This transcription is absent from the audiobook, and no narration is added to the alignment pathway.
@@ -115,9 +116,6 @@ for book in thang-long-noi-gian dem-hoi-long-tri; do
   podman compose run --rm --volume "$PWD/data:/data:z" ace \
     "/data/gold/$book.epub" \
     --outdir "/data/silver/issue-17/validation/$book-ace" --force
-  python data/silver/issue-17/validation/inspect-package.py \
-    "data/gold/$book.epub" > \
-    "data/silver/issue-17/validation/$book-package-inspection.json"
 done
 ```
 
@@ -128,7 +126,7 @@ All 280 files in the retained frozen-evidence checksum inventory remain unchange
 Actual frontend and inference integration runs through the inline-uv benchmark and publication commands.
 Both final EPUBs pass Compose EPUBCheck with zero errors and warnings.
 Ace flags the omitted `accessModeSufficient` property, a SHOULD discovery property whose textual claim awaits human review.
-Package inspection checks ZIP sizes and duplicate entries, manifest resources, local references, reachable assets, audio references, and overlay duration totals.
+Package inspection checks ZIP sizes and duplicate entries, manifest resources, local references, reachable assets, audio references, and overlay duration totals. The current package-inspection results were produced by a local one-off diagnostic; the repository does not yet provide a reproducible inspection command for this check.
 Eight unused alignment source resources, including three byte-identical image variants, are removed from the final package while its referenced cover, portrait, transcription, and seven audio tracks remain available.
 The alignment package has 38 resources, 35 manifest entries, seven referenced Opus tracks, and 3,382 clips totaling 16,446.44 seconds of overlay intervals.
 It contains 167,904,135 file bytes, with 167,899,163 compressed and 170,887,746 uncompressed resource bytes.
@@ -174,4 +172,5 @@ playwright-cli -s=readest requests
 
 Earlier Readest imports of both publications transferred successfully but remained at "Loading…"; a bronze source control imported successfully. The retained browser diagnostics show no EPUB parsing error, and the exact cause of Readest's behavior is unknown.
 Manual Thorium Reader review found both publications opened and read successfully, so the Readest observation is reader-specific. The TTS EPUB was repackaged after that review to remove repeated chapter boilerplate; that exact new ZIP has not been reopened manually.
-Synchronized playback, highlighting, audio quality, and human accessibility checks remain incomplete. The PR remains draft until the required manual checks are completed.
+Further manual review found two unresolved publication defects. In Thăng Long nổi giận, detached duplicate initial-letter blocks recur across additional chapters beyond the two currently repaired cases. In Đêm hội Long Trì, the opening audiobook credit — "Tác phẩm Đêm hội Long Trì - tiểu thuyết - tác giả Nguyễn Huy Tưởng - NXB Kim Đồng ấn hành - người đọc Ngọc Hân" — is currently synchronized to the visible "1912 - 1960" text; playback only advances after the following biographical sentence finishes. These observations require publication-level source/alignment repair without changing frozen #14/#15 evidence.
+Synchronized playback, highlighting, audio quality, and human accessibility checks remain incomplete. The PR remains draft until these defects and the remaining manual checks are resolved.
