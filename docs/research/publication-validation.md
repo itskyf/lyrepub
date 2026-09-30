@@ -111,8 +111,8 @@ Upstream EPUBCheck 5.4.0 documents EPUB 3.4 checking while the protocol target r
 The full declared dev suite passes 42 tests, and `hk check --pr` passes.
 All 280 files in the retained frozen-evidence checksum inventory remain unchanged.
 Both final EPUBs pass EPUBCheck with zero errors and warnings.
-Ace flags only omitted metadata for both books: the recommended discovery property `schema:accessModeSufficient`, the conformance-claim properties `dcterms:conformsTo` and `a11y:certifiedBy`, and the conditional `a11y:certifierCredential` and `a11y:certifierReport` when a conformance claim is made.
-No conformance claim is declared before the pending human accessibility review.
+Ace flags only omitted metadata for both books: the recommended discovery property `schema:accessModeSufficient`, omitted pending human review; `dcterms:conformsTo`, the accessibility conformance statement; `a11y:certifiedBy`, the evaluator information required when reporting that conformance; `a11y:certifierCredential`, included only if the evaluator holds a relevant credential or badge; and `a11y:certifierReport`, included only if the evaluator provides a publicly readable assessment report.
+No accessibility conformance claim is made before the pending human review.
 The alignment package removes eight unused source resources while retaining its referenced cover, portrait, transcription, and seven audio tracks.
 
 ## Optional browser validation
